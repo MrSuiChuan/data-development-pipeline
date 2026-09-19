@@ -685,6 +685,38 @@ def scan_sql_tree(req_dir: Path) -> List[Issue]:
 # ======================================================================
 # 3. Phase exit gates P2..P6 + submit quality
 # ======================================================================
+ARCH_TABLES_KEY = "tables"
+
+
+def declared_tables(req_dir: Path) -> Tuple[Optional[set], str]:
+    """从 ``architecture_doc.md`` 的 ```json 机读块取「交付表清单」。
+
+    返回 ``(表名集合, 原因)``：集合为 None 表示拿不到，原因指明断在哪一步。
+    **刻意只认 ``tables[].name``**——action/layer 允许写但不校验，避免一次改太多
+    （先把"造的表 == 设计声明的表"这条钉死）。
+    """
+    doc = context.read_text(req_dir / "architecture_doc.md")
+    block = context.extract_json_block(doc)
+    if block is None:
+        return None, "architecture_doc.md 里找不到 ```json 机读块（或不是合法 JSON）"
+    if not isinstance(block, dict):
+        return None, "机读块必须是 JSON 对象"
+    rows = block.get(ARCH_TABLES_KEY)
+    if not isinstance(rows, list) or not rows:
+        return None, f"机读块缺非空 {ARCH_TABLES_KEY} 数组"
+    names: List[str] = []
+    for idx, row in enumerate(rows):
+        if not isinstance(row, dict):
+            return None, f"{ARCH_TABLES_KEY}[{idx}] 不是对象"
+        name = str(row.get("name") or "").strip()
+        if not name:
+            return None, f"{ARCH_TABLES_KEY}[{idx}] 缺 name"
+        if name in names:
+            return None, f"{ARCH_TABLES_KEY} 里重复声明: {name}"
+        names.append(name)
+    return set(names), ""
+
+
 def validate_phase2_architecture(req_dir: Path, level: Optional[str]) -> List[Issue]:
     issues: List[Issue] = []
     spec = req_dir / "requirement_spec.md"
@@ -704,6 +736,18 @@ def validate_phase2_architecture(req_dir: Path, level: Optional[str]) -> List[Is
             )
         if level in ("L2", "L3") and "mermaid" not in doc.lower() and not re.search(r"!\[[^]]*\]\([^)]+\)", doc):
             issues.append(Issue("arch.link.missing", 2, "FAIL", "L2/L3 必须含数据链路图（mermaid 或图片）", file="architecture_doc.md"))
+        # 交付表清单：P3 会拿它和 ddl/etl/dp_task 的实际表名做等值比对（PIPE-002）
+        tables, reason = declared_tables(req_dir)
+        if tables is None:
+            issues.append(
+                Issue(
+                    "arch.tables.missing",
+                    2,
+                    "FAIL",
+                    f"交付表清单不可用: {reason}。架构必须给出 ```json 机读块 {{\"tables\":[{{\"name\":\"<表名>\"}}]}}",
+                    file="architecture_doc.md",
+                )
+            )
     html_path = req_dir / "pipeline.html"
     html = context.read_text(html_path)
     if level in ("L2", "L3") and len(html.strip()) < 20:
@@ -748,6 +792,50 @@ def validate_phase3_data_dev(req_dir: Path, state: Dict[str, Any]) -> List[Issue
                 )
             )
     issues.extend(scan_sql_tree(req_dir))
+
+    # 架构 → 研发的契约：造的表必须与 architecture_doc.md 声明的交付表清单**等值**。
+    # 多造 = 设计了才该造；少造 = 砍表必须留下记录（回跳 P2 改设计）。
+    built = table_sets.get("ddl") or set()
+    declared, reason = declared_tables(req_dir)
+    if declared is None:
+        issues.append(Issue("dev.arch.tables_missing", 3, "FAIL", f"架构交付表清单不可用: {reason}"))
+    elif built:
+        not_built = sorted(declared - built)
+        not_declared = sorted(built - declared)
+        if not_built:
+            issues.append(
+                Issue(
+                    "dev.arch.table_missing",
+                    3,
+                    "FAIL",
+                    f"架构声明了但没造: {not_built[:5]}（要改设计请回跳 P2：advance --allow-back --reason）",
+                    file="architecture_doc.md",
+                )
+            )
+        if not_declared:
+            issues.append(
+                Issue(
+                    "dev.arch.table_extra",
+                    3,
+                    "FAIL",
+                    f"造了架构没声明的表: {not_declared[:5]}（先回 P2 补进交付表清单）",
+                    file="architecture_doc.md",
+                )
+            )
+    # 白捡一条：SDS 的目标表必须真的在交付表里（现有数据，零新增声明）
+    sds = context.load_json(req_dir / "sds_design.json")
+    if isinstance(sds, dict) and built:
+        sds_target = str((sds.get("target_table") or {}).get("name") or "").strip()
+        if sds_target and sds_target not in built:
+            issues.append(
+                Issue(
+                    "dev.sds_target_not_built",
+                    3,
+                    "FAIL",
+                    f"SDS 目标表 {sds_target} 不在交付表里: {sorted(built)[:5]}",
+                    file="sds_design.json",
+                )
+            )
 
     exec_path = req_dir / "etl_dev_exec.json"
     exec_ev = context.load_json(exec_path)

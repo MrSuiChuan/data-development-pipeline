@@ -37,7 +37,9 @@ py -3 .data-dev/engine/ddp.py start --ticket <T-xxxx> [--autopilot]
 
 - 加载 `architecture-design` skill；L2/L3 调 `data-development-plugin:architecture-explorer` agent 做四层设计+方案对比+影响分析；
   L1 走精简路径（复核目标表+查下游+判加列/改值，不画方案）。
-- 产出 `architecture_doc.md`（含难度级别、链路图）与 `pipeline.html`（L2/L3）。
+- 产出 `architecture_doc.md`（含难度级别、链路图，**以及 ```json 交付表清单机读块**）
+  与 `pipeline.html`（L2/L3）。交付表清单是 P3 的契约：P3 出口要求 `ddl/` 的表名集合
+  与它**完全相等**，多造少造都 FAIL；中途增减表必须回跳 P2 改清单，不许在 P3 里偷改设计。
 - 转场：`py -3 .data-dev/engine/ddp.py advance --phase 3 --ticket <T-xxxx> --reason "P2 出口"`。
 
 ## 第三步：P3 数据研发（工程量最重）

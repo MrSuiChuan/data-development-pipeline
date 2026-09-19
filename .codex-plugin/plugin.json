@@ -1,6 +1,6 @@
 {
   "name": "data-development-plugin",
-  "version": "1.2.2+codex.20260919143830",
+  "version": "1.2.2+codex.20260919161051",
   "description": "通用离线数据任务研发流水线：六阶段状态机（SDS → 架构 → 研发 → 测试 → 部署 → 语义层）+ Hook 硬门控，强制按顺序交付机器证据。任务单/数据平台/质量/知识库均为可配置连接器。",
   "author": {
     "name": "data-development-plugin maintainers"

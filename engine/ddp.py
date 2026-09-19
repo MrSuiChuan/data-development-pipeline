@@ -421,7 +421,7 @@ def verb_start(flags: Dict[str, str]) -> None:
     steps.append({"step": 2, "ok": True, "note": "SDS 终版锚点存在"})
     # 3. 内容重验：从评论 json 块落盘并重跑八条规则（不信任本地文件）
     text = latest["comment"].get("content_md", "")
-    block = extract_json_block(text)
+    block = context.extract_json_block(text)
     if block is None:
         emit({"ok": False, "blocked": True, "step": 3, "reason": "评论中找不到 json 机读块，双源降级失败。"})
         sys.exit(1)
@@ -1299,16 +1299,6 @@ def _write_deploy_artifacts(req: Path, tid: str) -> None:
     )
 
 
-def extract_json_block(text: str) -> Optional[Any]:
-    m = re.search(r"```json\s*\n([\s\S]*?)```", text)
-    if not m:
-        return None
-    try:
-        return json.loads(m.group(1))
-    except json.JSONDecodeError:
-        return None
-
-
 def verb_demo(flags: Dict[str, str]) -> None:
     mode = CONFIG.get("mode") or flags.get("mode", "mock")
     if mode != "mock":
@@ -1383,6 +1373,16 @@ def verb_demo(flags: Dict[str, str]) -> None:
 
 难度级别: {level}
 目标表: ads_user_act_di（ads/user）
+
+## 交付表清单
+
+```json
+{{
+  "tables": [
+    {{"name": "ads_user_act_di", "action": "alter", "layer": "ads"}}
+  ]
+}}
+```
 
 ## 链路
 

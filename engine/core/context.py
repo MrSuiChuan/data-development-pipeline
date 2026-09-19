@@ -66,6 +66,23 @@ def sha256_text(text: str) -> str:
     return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
 
 
+JSON_BLOCK_RE = re.compile(r"```json\s*\n([\s\S]*?)```")
+
+
+def extract_json_block(text: str) -> Any:
+    """取 Markdown 里第一个 ```json 机读块并解析；没有或不是合法 JSON 就返回 None。
+
+    SDS 终版贴单和 P2 的交付表清单都用这个约定：人读上面的散文，机器读下面这个块。
+    """
+    match = JSON_BLOCK_RE.search(text or "")
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+
+
 def sha256_file(path: Path) -> str:
     """文件内容的 sha256，**行尾先归一为 LF**。
 

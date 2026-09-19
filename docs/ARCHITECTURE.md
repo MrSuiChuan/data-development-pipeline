@@ -76,6 +76,29 @@
 确认门（AskUserQuestion → confirmed=true）。终版 = 贴 工单评论
 `【数据概要设计 vN】`（锚头+说明书+json 机读块+确认行）→ verify-latest 回读。
 
+### P2 架构门（validate_phase2_architecture）
+
+检查 `architecture_doc.md` 存在且非空、含难度级别（与 `state.level` 一致）、L2/L3 有
+数据链路图（mermaid 或图片）、无占位符；`pipeline.html` L2/L3 必须有。
+
+**交付表清单（PIPE-002）**：文档里必须有一个 ```json 机读块声明本单要交付的全部表：
+
+````markdown
+```json
+{"tables": [{"name": "dwd_user_act_di", "action": "create"}]}
+```
+````
+
+只强制 `name`（`action`/`layer` 允许写但不校验）。缺失、非法 JSON、空数组、缺 `name`、
+重复表名 → `arch.tables.missing` FAIL。
+
+**P3 出口做等值校验**：`ddl/` 的表名集合必须与这份清单**完全相等**——
+`dev.arch.table_missing`（声明了没造）/ `dev.arch.table_extra`（造了没声明）分别报出。
+另外 SDS 的 `target_table.name` 必须出现在交付表里（`dev.sds_target_not_built`）。
+中途增减表必须回跳 P2 改清单（`advance --allow-back --reason`），不允许在 P3 里改设计。
+这样 P2 才真正约束 P3——在此之前 `architecture_doc.md` 除 P2 门自己以外没有任何读取方，
+设计写 A/B/C、实际造 X/Y/Z 两道门都会放过。
+
 ### P3 SQL 17 项（sql_compliance_check）
 
 零容忍 9 条：

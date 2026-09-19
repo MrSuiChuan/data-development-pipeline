@@ -163,6 +163,32 @@ env + `executed_at` 时效 + 账本命中），而 P4 的前置检查只有一�
 - 修改 `.gitattributes` 的注释，把"因此必须按归一化后的内容哈希"写清楚，避免以后有人
   把哈希改回字节比较。
 
+### Fixed（架构设计真正约束研发交付物，PIPE-002）
+
+对抗式复核的结论：**P2 对 P3 零约束**。`validate_phase2_architecture` 只检查文档存在、
+含 `Lx`、L2/L3 有链路图、无占位符，从不解析表清单；`validate_phase3_data_dev` 只校验
+`ddl/` `etl/` `dp_task/` 三个目录**彼此**表名一致，从不读 `architecture_doc.md`。
+`rg architecture_doc engine` 也证实：除 P2 门自己和 demo 生成器外没有任何读取方。
+结果是设计 A/B/C、实际造 X/Y/Z，两道门全部放过。
+
+- `architecture_doc.md` 必须带一个 ```json 机读块声明交付表清单
+  （`{"tables":[{"name":"..."}]}`）。只强制 `name`；`action`/`layer` 允许写但不校验。
+- P3 出口做**等值**校验：`dev.arch.table_missing`（声明了没造）/ `dev.arch.table_extra`
+  （造了没声明）分别报出；另加 SDS `target_table.name` 必须在交付表里
+  （`dev.sds_target_not_built`，用现有数据白捡的一条强校验）。
+- 选 JSON 机读块而不是 Markdown 表格：`context.extract_json_block` 已经存在（SDS 终版
+  贴单在用），零新解析逻辑、零歧义；表格解析要额外处理表头命名、对齐行、转义竖线三处边界。
+  顺带把 `extract_json_block` 从 `ddp.py` 提到 `core/context.py`，两边共用一份。
+- **中途增减表必须回跳 P2 改清单**（`advance --allow-back --reason`），不允许在 P3 里
+  偷偷改设计。这是有意的节奏变化：架构是契约，砍表也要留记录。
+- demo 生成器一并补上机读块；`skills/architecture-design`、`commands/start.md`
+  写明要求（改了命令所以重跑了生成器）。
+
+### Tests
+
+- 新增 6 个用例：设计一张造一张必须全绿；P2 缺机读块 / 空数组 / 缺 name / 重复表名 /
+  非法 JSON 都要 FAIL；P3 少造、多造、SDS 目标表不在交付表里都要 FAIL。
+
 ## [1.2.2] — 2026-09-11
 
 ### Added

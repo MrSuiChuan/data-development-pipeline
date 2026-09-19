@@ -282,6 +282,7 @@ class FlowOptionTests(unittest.TestCase):
         code = etl if etl is not None else self.ETL_V1
         for sub in ("ddl", "etl", "dp_task"):
             context.write_text(self.req / sub / "ads_t.sql", code)
+        self._arch_doc(["ads_t"])
         context.write_json(
             self.req / "etl_dev_exec.json",
             {"status": "SUCCESS", "query_id": "q_real", "env": "dev", "executed_at": context.utcnow()},
@@ -306,6 +307,16 @@ class FlowOptionTests(unittest.TestCase):
             "limits": {},
             "context": {"self_check_result": "passed", "verify_result": "passed"},
         }
+
+    def _arch_doc(self, tables: list) -> None:
+        """写一份带交付表清单机读块的 architecture_doc.md。"""
+        rows = ",\n".join('    {"name": "%s"}' % name for name in tables)
+        context.write_text(
+            self.req / "architecture_doc.md",
+            "# architecture_doc.md\n\n难度级别: L1\n\n## 交付表清单\n\n"
+            '```json\n{\n  "tables": [\n' + rows + "\n  ]\n}\n```\n\n"
+            "## 链路\n\n```mermaid\ngraph LR\nA[dwd_t] --> B[ads_t]\n```\n",
+        )
 
     def test_p3_evidence_matching_current_sql_passes(self) -> None:
         state = self._p3_ready()
@@ -369,6 +380,57 @@ class FlowOptionTests(unittest.TestCase):
             context.write_text(self.req / sub / "ads_t.sql", self.ETL_V2)
         issues = validators.validate_phase5_deploy(self.req, {"mode": "mock"})
         self.assertTrue(any(i.code == "evidence.binding.stale" for i in issues), issues)
+
+    # ---- 架构交付表清单 → 研发交付物的等值契约（PIPE-002） ----
+
+    def test_p3_happy_path_has_no_failures(self) -> None:
+        """设计一张、造一张，P3 出口应当全绿（在此之前架构对研发零约束）。"""
+        state = self._p3_ready()
+        issues = validators.validate_phase3_data_dev(self.req, state)
+        self.assertFalse(validators.has_blockers(issues), validators.issues_to_dicts(issues))
+
+    def test_p2_requires_delivery_table_block(self) -> None:
+        context.write_text(self.req / "requirement_spec.md", "# spec\n有内容")
+        context.write_text(self.req / "architecture_doc.md", "# doc\n\n难度级别: L1\n\n只说人话，没有机读块。\n")
+        issues = validators.validate_phase2_architecture(self.req, "L1")
+        self.assertTrue(any(i.code == "arch.tables.missing" for i in issues), issues)
+
+    def test_p2_rejects_malformed_delivery_table_block(self) -> None:
+        context.write_text(self.req / "requirement_spec.md", "# spec\n有内容")
+        for body in (
+            '```json\n{"tables": []}\n```\n',          # 空清单
+            '```json\n{"tables": [{"action": "x"}]}\n```\n',   # 缺 name
+            '```json\n{"tables": [{"name": "a"}, {"name": "a"}]}\n```\n',  # 重复
+            "```json\n{不是合法 JSON}\n```\n",
+        ):
+            context.write_text(
+                self.req / "architecture_doc.md",
+                "# doc\n\n难度级别: L1\n\n" + body,
+            )
+            issues = validators.validate_phase2_architecture(self.req, "L1")
+            self.assertTrue(any(i.code == "arch.tables.missing" for i in issues), (body, issues))
+
+    def test_p3_blocks_declared_table_not_built(self) -> None:
+        state = self._p3_ready()
+        self._arch_doc(["ads_t", "dwd_mid_t"])   # 设计了两张，只造了一张
+        issues = validators.validate_phase3_data_dev(self.req, state)
+        self.assertTrue(any(i.code == "dev.arch.table_missing" for i in issues), issues)
+
+    def test_p3_blocks_built_table_not_declared(self) -> None:
+        state = self._p3_ready()
+        for sub in ("ddl", "etl", "dp_task"):
+            context.write_text(self.req / sub / "extra_t.sql", self.ETL_V1)
+        issues = validators.validate_phase3_data_dev(self.req, state)
+        self.assertTrue(any(i.code == "dev.arch.table_extra" for i in issues), issues)
+
+    def test_p3_blocks_sds_target_table_not_in_delivery_tables(self) -> None:
+        state = self._p3_ready()
+        context.write_json(
+            self.req / "sds_design.json",
+            {"target_table": {"name": "someone_else_t", "layer": "ads"}},
+        )
+        issues = validators.validate_phase3_data_dev(self.req, state)
+        self.assertTrue(any(i.code == "dev.sds_target_not_built" for i in issues), issues)
 
     # ---- 后半程门：回刷与数据质量（PIPE-004） ----
 
