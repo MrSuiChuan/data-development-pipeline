@@ -149,10 +149,25 @@ macOS/Linux 上没有 `py`，hook 命令失败而宿主按 fail-open 放行，�
 （测试/ETL 必须经 `engine platform run-sql`），否则出口 FAIL；`status --gate`
 可直接对当前阶段跑 stage_gate 诊断缺项。
 
-**证据绑定产物版本（PIPE-001）**：执行账本每条记录带 `sql_hash`（该次真跑的 SQL
-内容指纹）。P3 与 P4 出口除了查 `query_id` 是否在账本里，还会把该指纹与当前
-`etl/` `dp_task/` 下的 SQL 内容比对——不一致说明"过门之后改过代码"，判
-`evidence.binding.stale` FAIL，必须重新真跑。旧账本缺 `sql_hash` 时降级为 WARN。
+**证据的两条约束：绑定产物版本 + 保鲜期（PIPE-001 / PIPE-003）**
+
+执行账本每条记录都带 `sql_hash`（该次真跑的 SQL 内容指纹）。出口门做的判定按阶段分开：
+
+| 阶段 | 查 query_id 在账本里 | 查时效（`evidence_max_age_hours`，默认 24h） | 查绑定（指纹 == 当前 SQL） |
+| --- | --- | --- | --- |
+| P3 | 是 | 是 | 是 |
+| P4 | 是 | 是 | 是 |
+| P5 | 否 | **否**（见下） | 是 |
+
+- **绑定**：把账本里该 `query_id` 的 `sql_hash` 与当前 `etl/` `dp_task/` 下 SQL 的内容
+  比对。不一致说明"过门之后改过代码"，判 `evidence.binding.stale` FAIL，必须重新真跑。
+  旧账本缺 `sql_hash` 时降级 WARN。
+- **时效只在 P3/P4 判，P5 不重复判**。理由：时效回答的是"dev 是什么时候跑的"，
+  P4 已经判过；而 P5 要回答的是"要部署的是不是被测过的那一份"，那是绑定问题。
+  如果 P5 也判时效，一个跨天推进的正常工单会因为"跑得早"被拦，而它要部署的代码
+  其实已经被 P4 验证过。**代价**：P4 到 P5 之间不再受保鲜期约束——但复制或改动
+  `etl_dev_exec.json` 在 P5 阶段是被 `gates.PHASE_FILE_MAP`（只允许 3/4 阶段写）
+  和 `runtime_guard` 挡住的，所以这里读到的仍是 P4 判过的那份证据。
 
 ### P6
 

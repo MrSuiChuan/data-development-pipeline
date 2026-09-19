@@ -116,6 +116,28 @@ engine_integrity 自检都会失败，错误暴露在用户侧而不是 CI。
 已做正对照：把 `.claude-plugin` 版本改成 9.9.9、往 `engine/core/spec.py` 追加一行，
 两条检查都按预期失败并指名问题，还原后恢复通过。
 
+### Fixed（证据保鲜期贯穿全链路，P5 补上绑定）
+
+**PIPE-003**：P3 出口走的是完整的 `execution_evidence_ok`（status + 非空 query_id +
+env + `executed_at` 时效 + 账本命中），而 P4 的前置检查只有一行
+`exec_ev.get("status") != "SUCCESS"`，P5/P6 完全不看。结果是：一份 24 小时有效期的
+证据，只要在 P3 通过的那一刻还没过期，之后搁置多久都能一路放行到发布。
+
+- P4 前置改调 `execution_evidence_ok`，时效与账本命中一并复验；`query_id` 不在账本里
+  单独判 `test.precondition.etl_ledger`。
+- **P5 补上绑定**：原先 P5 只查 `deploy_plan` / `delivery_summary`，不碰 ETL 证据——
+  于是过 P4 之后又改 ETL 照样能部署。现在 P5 也会把账本指纹与当前
+  `etl/` `dp_task/` 内容比对，不一致即 FAIL。
+- **P5 刻意不重复判时效**，判断依据写进了 `docs/ARCHITECTURE.md` 的阶段处理表：
+  时效回答"dev 什么时候跑的"（P4 已判），绑定回答"要部署的是不是被测过的那一份"
+  （P5 必须仍然成立）。让 P5 也判时效会把跨天推进的正常工单拦掉，而它要部署的代码
+  已经被 P4 验证过。
+
+### Tests
+
+- 新增 2 个用例：证据超过 30 小时（跨过保鲜期）时 P4 必须 FAIL；P4 之后改 ETL 时
+  P5 必须 FAIL（改之前 P5 不判绑定，改动确实拦不住）。
+
 ## [1.2.2] — 2026-09-11
 
 ### Added

@@ -10,7 +10,7 @@
     "core/spec.py": "a4259c7fd98c6649c45e12ebd078d4f0be50b212d04681c544265ca2b8988eb0",
     "core/sql_platforms.py": "ef22c43e63536531816b2220e1b71c6edbd240d36b261ff3d3ed83ce2f56d5a3",
     "core/state.py": "3ee78bb9936536764efe998e2d930105ce25469f5f30e43d11bf4446a00a7771",
-    "core/validators.py": "f9ce969a28607af7e3b2e1fc27feb17cf5d464441f6a85acfbaa9ea2da29e80a",
+    "core/validators.py": "521931c1ba87e0babde43162e3b65c974c2cac06a967773648bbc191fd641085",
     "ddp.py": "7733b09b26d41f822e1d19e2583866c180ffa0acf22198ef30bfe10ffe837b4a",
     "templates/AGENTS.ddp.md": "bcb78938e5d9602884d37a6e31a011e2cf0d3bfccc8706dc684733dfc08e0a3c",
     "templates/CLAUDE.ddp.md": "e13c178503ab4663aad0bafbeaec596c4b16229dfd4041ade84a685e6cfe5fd3",

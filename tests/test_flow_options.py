@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT_REPO = Path(__file__).resolve().parent.parent
@@ -334,6 +335,39 @@ class FlowOptionTests(unittest.TestCase):
         for sub in ("etl", "dp_task"):
             context.write_text(self.req / sub / "ads_t.sql", self.ETL_V2)
         issues = validators.validate_phase4_testing(self.req, state)
+        self.assertTrue(any(i.code == "evidence.binding.stale" for i in issues), issues)
+
+    def test_p4_blocks_evidence_past_its_freshness_window(self) -> None:
+        """P3 之后搁置超过 evidence_max_age_hours，必须重新真跑。"""
+        state = self._p3_ready()
+        context.write_text(
+            self.req / "test_report.md",
+            "# 测试报告\n\nTC-0001 主键唯一 ✅ PASS (query_id: q_t1)\n" * 2,
+        )
+        context.write_json(
+            self.req / "test_runs.json",
+            {"runs": [{"test_id": "TC-0001", "status": "SUCCESS", "query_id": "q_t1"}]},
+        )
+        stale = (datetime.now(timezone.utc) - timedelta(hours=30)).isoformat()
+        context.write_json(
+            self.req / "etl_dev_exec.json",
+            {"status": "SUCCESS", "query_id": "q_real", "env": "dev", "executed_at": stale},
+        )
+        issues = validators.validate_phase4_testing(self.req, state)
+        self.assertTrue(any(i.code == "test.precondition.etl" for i in issues), issues)
+        self.assertTrue(
+            any("过期" in i.message for i in issues if i.code == "test.precondition.etl"), issues
+        )
+
+    def test_p5_blocks_when_etl_edited_after_evidence(self) -> None:
+        """P4 之后又改 ETL：不能部署一份没人验证过的代码。"""
+        self._p3_ready()
+        self._p5_ready([{"action": "create", "table": "ads_t"}])
+        ok = validators.validate_phase5_deploy(self.req, {"mode": "mock"})
+        self.assertFalse([i for i in ok if i.code == "evidence.binding.stale"], ok)
+        for sub in ("etl", "dp_task"):
+            context.write_text(self.req / sub / "ads_t.sql", self.ETL_V2)
+        issues = validators.validate_phase5_deploy(self.req, {"mode": "mock"})
         self.assertTrue(any(i.code == "evidence.binding.stale" for i in issues), issues)
 
     # ---- 后半程门：回刷与数据质量（PIPE-004） ----

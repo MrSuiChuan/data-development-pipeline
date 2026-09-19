@@ -893,11 +893,26 @@ def validate_phase4_testing(req_dir: Path, state: Dict[str, Any]) -> List[Issue]
                     file="test_runs.json",
                 )
             )
-    # evidence that ETL ran on dev before tests
+    # 前置证据与 P3 走同一套判定：status + 非空 query_id + env + 时效 + 账本命中。
+    # 只看 status 的话，一份 24 小时有效期的证据会在 P3 之后变成永久有效。
     exec_ev = context.load_json(req_dir / "etl_dev_exec.json") or {}
-    if exec_ev.get("status") != "SUCCESS":
-        issues.append(Issue("test.precondition.etl", 4, "FAIL", "前置 etl_dev_run 未 SUCCESS，禁止进入 P4 出口"))
+    ok_ev, reason = execution_evidence_ok(exec_ev, limits)
+    if not ok_ev:
+        issues.append(
+            Issue("test.precondition.etl", 4, "FAIL", f"前置 etl_dev_run 证据不合格: {reason}")
+        )
     else:
+        ledger_ids = execution_ledger_ids(req_dir)
+        if ledger_ids is not None and str(exec_ev.get("query_id")) not in ledger_ids:
+            issues.append(
+                Issue(
+                    "test.precondition.etl_ledger",
+                    4,
+                    "FAIL",
+                    "前置 etl_dev_exec.json 的 query_id 不在引擎执行账本中",
+                    file="etl_dev_exec.json",
+                )
+            )
         # 与 P3 同一道绑定：过 P3 之后改 ETL，不能带着旧证据一路走到 P4。
         evidence_binds_to_current_sql(req_dir, exec_ev, 4, issues)
     # count floor is a WARN (doc: 下限只是 WARN)
@@ -952,6 +967,14 @@ def validate_phase5_deploy(req_dir: Path, state: Dict[str, Any]) -> List[Issue]:
     ctx = state.get("context") or {}
     if is_prod and ctx.get("tracker_transitioned") != "待验收":
         issues.append(Issue("deploy.tracker.not_accepted", 5, "WARN", "生产工单未确认流转到待验收（WARN）"))
+    # 发布/回刷的必须是**验证过的那份代码**：过 P4 之后又改 ETL，不该还能部署。
+    # 这里只查绑定、不重复查时效——时效说的是"dev 什么时候跑过"，P4 已经判过；
+    # 而"部署的是不是被测过的那一份"在 P5 必须仍然成立。
+    # 注：P5 阶段不允许再改 etl_dev_exec.json（gates.PHASE_FILE_MAP 限定 3/4 阶段可写，
+    # runtime_guard 拦截 shell 改写），所以这里直接读现成证据即可。
+    deploy_exec_ev = context.load_json(req_dir / "etl_dev_exec.json")
+    if isinstance(deploy_exec_ev, dict) and str(deploy_exec_ev.get("query_id") or "").strip():
+        evidence_binds_to_current_sql(req_dir, deploy_exec_ev, 5, issues)
     # ---- 后半程门：数据回刷 / 数据质量必须留下可核验产物 ----
     plan_items = [i for i in (plan.get("items") or []) if isinstance(i, dict)]
     backfill_items = [i for i in plan_items if i.get("action") == "backfill"]
