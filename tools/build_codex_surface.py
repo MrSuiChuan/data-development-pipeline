@@ -31,10 +31,24 @@ HOOKS = ROOT / "hooks"
 TEMPLATES = ROOT / "engine" / "templates"
 
 PLUGIN_NAME = "data-development-plugin"
-# 基础版本必须和 CHANGELOG / .claude-plugin 保持一致；`+codex.<token>` 后缀由
-# `tools/reinstall.py` 维护（换后缀 + 重装，宿主按版本缓存插件），
-# 生成器只保留后缀、不保留过期的基础版本。
-VERSION = "1.2.2"
+CLAUDE_MANIFEST = ROOT / ".claude-plugin" / "plugin.json"
+
+
+def base_version() -> str:
+    """基础版本的唯一来源：手写的 Claude 清单，其余位置全部由它派生。
+
+    原先这里硬编码 ``VERSION = "1.2.2"``，与 Claude 清单、CHANGELOG 三处各写一份，
+    谁都不会发现不一致（DEVEX-002）。`+codex.<token>` 后缀由 `tools/reinstall.py`
+    维护（宿主按版本号缓存插件），生成器只保留后缀、不重新发明基础版本。
+    """
+    try:
+        data = json.loads(CLAUDE_MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as err:
+        raise SystemExit(f"读不到基础版本：{CLAUDE_MANIFEST}（{err}）")
+    version = str(data.get("version") or "").strip()
+    if not version:
+        raise SystemExit(f"{CLAUDE_MANIFEST} 缺 version")
+    return version
 
 COMMAND_NAMES = (
     "setup",
@@ -132,8 +146,9 @@ def build_codex_hooks() -> None:
 
 def build_codex_manifest() -> None:
     manifest_path = ROOT / ".codex-plugin" / "plugin.json"
-    # 保留 update_plugin_cachebuster.py 写的 `+codex.<token>` 后缀，避免重跑生成器把它抹掉
-    version = VERSION
+    # 保留 tools/reinstall.py 写的 `+codex.<token>` 后缀，避免重跑生成器把它抹掉
+    base = base_version()
+    version = base
     existing = read(manifest_path)
     if existing:
         try:
@@ -141,7 +156,7 @@ def build_codex_manifest() -> None:
         except json.JSONDecodeError:
             current = ""
         if "+" in current:
-            version = f"{VERSION}+{current.split('+', 1)[1]}"
+            version = f"{base}+{current.split('+', 1)[1]}"
     manifest = {
         "name": PLUGIN_NAME,
         "version": version,

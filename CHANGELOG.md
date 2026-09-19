@@ -91,6 +91,31 @@ hooks、9 个 `ddp-*` 入口技能、AGENTS 模板），但 tests 和 CI 里没�
 - 已做正对照：人为往一个生成物里加一行，测试按预期失败并给出精确文件名，还原后恢复通过。
 - CI 主 job 跑 `unittest discover`，自动覆盖本测试。
 
+### Fixed（版本号收敛到单一来源 + 引擎清单进 CI）
+
+**DEVEX-002**：基础版本原先写在四个地方——`tools/build_codex_surface.py` 的
+`VERSION` 常量、`.claude-plugin/plugin.json`、`.codex-plugin/plugin.json`、
+`CHANGELOG.md`——没有任何检查。加了 `tools/reinstall.py` 之后更危险：它只改
+`.codex-plugin` 的版本，另外三处不会跟着动。
+
+- 生成器不再硬编码版本：`build_codex_surface.py` 改从 `.claude-plugin/plugin.json`
+  读基础版本（读不到就明确报错），其余位置由它派生。`VERSION` 常量已删除。
+- `tests/test_repo_invariants.py` 断言三者一致：Claude 清单版本 == Codex 清单里
+  `+` 之前的基础版本 == CHANGELOG **最新已发布**小节（跳过 `[Unreleased]`，
+  这点不写清会误报）。另加一条：`+` 后面只允许 `codex.` 前缀的 cachebuster。
+
+**DEVEX-003**：`engine/.engine-manifest.json` 有人生成、没人核对。CONTRIBUTING 要求
+改完 engine/ 必须重跑，但 CI 不检查——忘了重跑，每个贡献者 `/setup` 之后的
+engine_integrity 自检都会失败，错误暴露在用户侧而不是 CI。
+
+- `tools/generate_engine_manifest.py` 拆出纯函数 `build_manifest()`，`main()` 只负责写盘。
+- 同一测试文件里比对清单与 engine/ 当前内容，能分别报出"清单里有但文件没了 /
+  文件有但清单没登记 / 内容变了没更新"。
+
+两个检查都**只读不写**——写成"跑生成器再比对"会自己把漂移修好，然后永远通过。
+已做正对照：把 `.claude-plugin` 版本改成 9.9.9、往 `engine/core/spec.py` 追加一行，
+两条检查都按预期失败并指名问题，还原后恢复通过。
+
 ## [1.2.2] — 2026-09-11
 
 ### Added

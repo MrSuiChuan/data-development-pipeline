@@ -19,7 +19,8 @@ from pathlib import Path
 ENGINE = Path(__file__).resolve().parent.parent / "engine"
 
 
-def main() -> int:
+def build_manifest() -> dict:
+    """按 engine/ 当前内容算出清单（纯函数：不写盘，便于测试比对）。"""
     manifest: dict[str, str] = {}
     for path in sorted(ENGINE.rglob("*")):
         if path.is_dir() or "__pycache__" in path.parts:
@@ -27,6 +28,11 @@ def main() -> int:
         if path.name == ".engine-manifest.json":
             continue
         manifest[path.relative_to(ENGINE).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return manifest
+
+
+def main() -> int:
+    manifest = build_manifest()
     (ENGINE / ".engine-manifest.json").write_text(
         json.dumps({"schema_version": 1, "files": manifest}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
