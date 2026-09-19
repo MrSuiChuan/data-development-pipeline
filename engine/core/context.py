@@ -67,11 +67,16 @@ def sha256_text(text: str) -> str:
 
 
 def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
+    """文件内容的 sha256，**行尾先归一为 LF**。
+
+    引擎完整性清单用这个函数。不能直接按原始字节哈希：同一份仓库在
+    `core.autocrlf=true` 的本机是 CRLF、新克隆出来是 LF（`.gitattributes` 强制
+    eol=lf），按字节算会让"另一个人 clone 下来"直接判定成引擎被改写、每个贡献者的
+    `/setup` 之后 engine_integrity 自检都失败。实测踩过。
+
+    引擎文件都很小（最大 68KB），整读即可；分块读会有 `\r\n` 被切在块边界上的风险。
+    """
+    return hashlib.sha256(Path(path).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
 
 def slugify(value: str) -> str:

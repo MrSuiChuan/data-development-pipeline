@@ -15,11 +15,17 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 
 ROOT_REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_REPO / "engine"))
+
+from core import context as engine_context  # noqa: E402
+
 CLAUDE_MANIFEST = ROOT_REPO / ".claude-plugin" / "plugin.json"
 CODEX_MANIFEST = ROOT_REPO / ".codex-plugin" / "plugin.json"
 CHANGELOG = ROOT_REPO / "CHANGELOG.md"
@@ -98,6 +104,28 @@ class EngineManifestTests(unittest.TestCase):
             "engine/.engine-manifest.json 已过期，"
             "跑 `py -3 tools/generate_engine_manifest.py` 后重新提交：\n  " + "\n  ".join(problems),
         )
+
+    def test_hash_is_line_ending_agnostic(self) -> None:
+        """清单必须对行尾风格免疫，否则"别人 clone 下来"就会被判成引擎被改写。
+
+        实测过这个 bug：本机 `core.autocrlf=true` 时工作副本是 CRLF，新克隆按
+        `.gitattributes` 得到 LF，同一份仓库的字节不同 -> engine_integrity 全线失败。
+        """
+        text = "a = 1\nb = 2\nc = 3\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            lf = Path(tmp) / "lf.py"
+            crlf = Path(tmp) / "crlf.py"
+            lf.write_bytes(text.encode("utf-8"))
+            crlf.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+            self.assertNotEqual(lf.read_bytes(), crlf.read_bytes())
+            self.assertEqual(engine_context.sha256_file(lf), engine_context.sha256_file(crlf))
+
+    def test_manifest_tool_and_selfcheck_share_one_hash_rule(self) -> None:
+        """生成器与自检必须用同一个哈希函数，否则跨平台必然对不上。"""
+        tool = load_module("ddp_generate_engine_manifest2", ROOT_REPO / "tools" / "generate_engine_manifest.py")
+        expected = tool.build_manifest()
+        sample = ROOT_REPO / "engine" / "core" / "context.py"
+        self.assertEqual(expected["core/context.py"], engine_context.sha256_file(sample))
 
 
 if __name__ == "__main__":

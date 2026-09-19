@@ -138,6 +138,31 @@ env + `executed_at` 时效 + 账本命中），而 P4 的前置检查只有一�
 - 新增 2 个用例：证据超过 30 小时（跨过保鲜期）时 P4 必须 FAIL；P4 之后改 ETL 时
   P5 必须 FAIL（改之前 P5 不判绑定，改动确实拦不住）。
 
+### Fixed（引擎清单对行尾免疫——"别人 clone 下来"不再当场报错）
+
+验证"能不能被他人 clone"时实测到的真 bug：**新克隆的 `engine_integrity` 全线不一致**。
+
+```
+工作副本: engine/core/validators.py CRLF=745 / 总行数=1165
+新克隆  : engine/core/validators.py CRLF=0   / 总行数=1165
+新克隆 engine_integrity: 不一致 -> core/clients.py, core/context.py,
+                                  core/gates.py, core/spec.py, core/validators.py
+```
+
+根因：`.engine-manifest.json` 存的是文件**原始字节**的 sha256，而文件的字节受 git
+行尾规范化影响。本机 `core.autocrlf=true` 得到 CRLF，新克隆按 `.gitattributes`
+（`eol=lf`）得到 LF，同一份仓库字节不同 → 清单必然对不上。这个仓库最不能出的一类
+问题：**声明与事实脱节**，而且错误暴露在别人那里。
+
+- `context.sha256_file()` 改为**行尾先归一为 LF 再哈希**（引擎文件最大 68KB，整读即可；
+  分块读会有 `\r\n` 被切在块边界上的风险）。
+- `tools/generate_engine_manifest.py` 删掉自己那份内联字节哈希，改为调用
+  `context.sha256_file`——生成器和自检必须用同一个函数，否则跨平台必然对不上。
+- 新增 2 个用例：同一段内容写成 LF 与 CRLF 必须得到同一个哈希；生成器的输出必须等于
+  `context.sha256_file` 的结果。
+- 修改 `.gitattributes` 的注释，把"因此必须按归一化后的内容哈希"写清楚，避免以后有人
+  把哈希改回字节比较。
+
 ## [1.2.2] — 2026-09-11
 
 ### Added

@@ -1,5 +1,9 @@
-# 统一按 LF 检出。engine/.engine-manifest.json 存的是文件**原始字节**的 sha256，
-# 一旦某个平台按 CRLF 检出，所有贡献者的 engine_integrity 自检都会失败。
+# 统一按 LF 检出，让"仓库里的字节"在各平台可预期。
+#
+# 注意：engine/.engine-manifest.json 是引擎完整性基线，但它**不能**按原始字节比较——
+# 本地工作副本可能是 CRLF（core.autocrlf=true），新克隆按本文件得到 LF，字节并不相同。
+# 所以 `context.sha256_file()` 会先把行尾归一为 LF 再哈希，生成器与自检共用这一个函数。
+# 改那两处时不要退回字节比较，否则别人 clone 下来 engine_integrity 会全线失败（实测踩过）。
 * text=auto eol=lf
 
 # 二进制资产不参与行尾转换
