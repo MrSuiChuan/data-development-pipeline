@@ -1,0 +1,38 @@
+{
+  "description": "data-development-plugin 三层防线：PreToolUse 硬门（permissionDecision=deny / decision:block）+ PostToolUse 验证器软提示（写 context 键）+ SessionStart 状态提醒。Claude Code 与 Codex 共用本文件；Windows 用 py -3，macOS/Linux 跑 tools/adapt_hooks.py 切换为 python3。",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -3 \"${CLAUDE_PLUGIN_ROOT}/hooks/pretooluse.py\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -3 \"${CLAUDE_PLUGIN_ROOT}/hooks/posttooluse.py\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -3 \"${CLAUDE_PLUGIN_ROOT}/hooks/sessionstart.py\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

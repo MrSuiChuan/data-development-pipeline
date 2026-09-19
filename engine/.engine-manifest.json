@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "files": {
+    "__init__.py": "46ea7e7beab8bf0d28cdcf5a04866e27e2e37c6f074d46783d2fcc12829446dd",
+    "core/__init__.py": "70a4744e9abec680b341fc542e0d42e06a1c2ac6ec4b3796be97152d2eb2b190",
+    "core/clients.py": "bd6eccb49415bc6d7554804c4f625b4d17e55208ffa91199a04abe5ada316e53",
+    "core/context.py": "4c19a4d56be8f28e3aa9d5563bd99092c5d8e665885b046f9842ac2470b29393",
+    "core/gates.py": "2124e81835b4cd1a39c8c0b064d04540a546b7e4461bc88b8c6f96535e717533",
+    "core/ov_knowledge.py": "73d8b7071f9e0c1de040a79036f3b69bad71e086efb4b32ffe7711ef38956d94",
+    "core/spec.py": "a4259c7fd98c6649c45e12ebd078d4f0be50b212d04681c544265ca2b8988eb0",
+    "core/sql_platforms.py": "ef22c43e63536531816b2220e1b71c6edbd240d36b261ff3d3ed83ce2f56d5a3",
+    "core/state.py": "3ee78bb9936536764efe998e2d930105ce25469f5f30e43d11bf4446a00a7771",
+    "core/validators.py": "f9ce969a28607af7e3b2e1fc27feb17cf5d464441f6a85acfbaa9ea2da29e80a",
+    "ddp.py": "7733b09b26d41f822e1d19e2583866c180ffa0acf22198ef30bfe10ffe837b4a",
+    "templates/AGENTS.ddp.md": "bcb78938e5d9602884d37a6e31a011e2cf0d3bfccc8706dc684733dfc08e0a3c",
+    "templates/CLAUDE.ddp.md": "e13c178503ab4663aad0bafbeaec596c4b16229dfd4041ade84a685e6cfe5fd3",
+    "templates/settings.json": "4d76d4b1730f472e06d88dd88f6602c4bf7e8e59dca6e79d1d0517aecb9ad01b"
+  }
+}

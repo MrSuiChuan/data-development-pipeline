@@ -1,0 +1,28 @@
+__pycache__/
+*.pyc
+.data-dev/
+.claude-output/
+.pytest_cache/
+*.log
+.DS_Store
+.tmp/
+*.key
+
+# 根目录的临时产物（调试/评审用的重定向输出、一次性探针脚本）。
+# 这类文件曾被堆在仓库根目录并被 git 收进去（REPO-001）。
+/_*
+
+# 写作产物不留在插件仓库里：草稿放 ../drafts/，成品在别处维护。
+/article-*.md
+/title-brief.md
+
+# AWR local runtime state
+.awr/state.db
+.awr/state.db-*
+.awr/artifacts/
+.awr/mutations/
+.awr/cache/
+.awr/clients/
+.awr/executions/
+# AWR 的文件清单快照，由 intake inspect 重新生成
+.awr/intake/inventory.json

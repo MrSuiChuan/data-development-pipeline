@@ -1,0 +1,12 @@
+# 统一按 LF 检出。engine/.engine-manifest.json 存的是文件**原始字节**的 sha256，
+# 一旦某个平台按 CRLF 检出，所有贡献者的 engine_integrity 自检都会失败。
+* text=auto eol=lf
+
+# 二进制资产不参与行尾转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.ico binary
+*.zip binary

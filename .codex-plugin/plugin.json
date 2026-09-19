@@ -1,0 +1,37 @@
+{
+  "name": "data-development-plugin",
+  "version": "1.2.2+codex.20260919134547",
+  "description": "通用离线数据任务研发流水线：六阶段状态机（SDS → 架构 → 研发 → 测试 → 部署 → 语义层）+ Hook 硬门控，强制按顺序交付机器证据。任务单/数据平台/质量/知识库均为可配置连接器。",
+  "author": {
+    "name": "data-development-plugin maintainers"
+  },
+  "license": "MIT",
+  "keywords": [
+    "data-development",
+    "pipeline",
+    "state-machine",
+    "gates",
+    "offline-tasks",
+    "doris"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/claude-codex-hooks.json",
+  "interface": {
+    "displayName": "Data Development Pipeline",
+    "shortDescription": "六阶段数据研发流水线 + Hook 硬门控",
+    "longDescription": "把离线数据任务研发工艺翻译成状态机 + 硬门控：AI 在门内自主干活，阶段出口只认机器证据（执行账本 query_id、test_runs.json、[已确认发布] token）。Claude Code 用斜杠命令，Codex 用 ddp-* 技能，两者共用同一引擎与 hook。",
+    "developerName": "data-development-plugin maintainers",
+    "category": "Productivity",
+    "capabilities": [
+      "Instructions",
+      "Lifecycle hooks",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "初始化数开插件并建一个数据需求工单",
+      "用数开流水线把这张表改造成加列 + 回刷",
+      "检查当前工单的阶段出口门为什么没通过"
+    ],
+    "brandColor": "#2F6FEB"
+  }
+}

@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m unittest discover -s tests
+      - run: python -m compileall -q engine hooks tests tools
+      - name: provenance/secret scan
+        run: |
+          ! rg -n -i "xhdw|alipay|复刻|调研文档|（与原版|见复刻差异" . -g '!.github/**' || exit 1
+          ! rg -n "ark-[A-Za-z0-9_-]{20,}|rvk_[A-Za-z0-9_-]{20,}" . -g '!.github/**' || exit 1
+
+  hooks:
+    # 这条 job 存在的唯一理由：hook 层的失败是静默的（启动器不存在 -> 宿主 fail-open
+    # -> 所有硬门失效）。必须在一个真 shell 里把 hooks.json 里的命令真跑一遍。
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: adapt hooks to this platform
+        run: python tools/adapt_hooks.py
+      - name: hook launcher must exist on this machine
+        run: python tools/adapt_hooks.py --check
+      - name: really invoke the configured PreToolUse hook
+        run: python -m unittest tests.test_hook_wiring -v
+      - name: setup_guard decisions must not regress
+        run: python -m unittest tests.test_gates.CliGateTests -v

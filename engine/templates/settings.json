@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(py -3 *)",
+      "Bash(python3 *)",
+      "Bash(python *)",
+      "Read",
+      "Glob",
+      "Grep",
+      "Write",
+      "Edit",
+      "Task"
+    ],
+    "deny": []
+  }
+}
