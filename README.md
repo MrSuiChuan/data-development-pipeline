@@ -70,7 +70,8 @@ tools/build_codex_surface.py 从 Claude 源生成 Codex 面（清单/hooks/入�
 ### 0. 环境要求
 
 - Claude Code（本机已具备）；
-- Python 3.9+。**Windows 请确保 `py -3` 可用**；macOS/Linux 装好后**必须跑一次**
+- Python 3.9+（CI 在 **3.9 与 3.12** 两端跑全量用例；下限改了要同步改这里，
+  `tests/test_repo_invariants.py` 会核对声明与 CI 矩阵一致）。**Windows 请确保 `py -3` 可用**；macOS/Linux 装好后**必须跑一次**
   `python3 tools/adapt_hooks.py`（详见下面「安装」第 3 步，不跑的话硬门会静默失效）；
 - mock 模式开箱即用；live 模式需 PATH 上有 `tracker` / `quality`（knowledge 可
   改用 HTTP 直连 OpenViking，无需本地 ov CLI），

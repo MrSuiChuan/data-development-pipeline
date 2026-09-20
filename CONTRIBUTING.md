@@ -33,6 +33,12 @@ claude plugin validate .
 - Evidence keys (`verify_result`, `self_check_result`, `user_confirmed`, ...) are
   written only by `evidence` engine commands; never add new raw `ctx set` paths.
 - Add regression tests for every gate or adapter change.
+- Keep the Python floor honest: the minimum version comes from the `Python X.Y+`
+  line in `README.md`, and `.github/workflows/ci.yml` must run the full suite on
+  that version (`tests/test_repo_invariants.py` checks both, and also parses every
+  source file with that version's grammar). New syntax or stdlib APIs must not
+  raise the floor silently — if you need 3.10+, change the README line and the
+  CI matrix together.
 
 ## License
 

@@ -189,6 +189,25 @@ env + `executed_at` 时效 + 账本命中），而 P4 的前置检查只有一�
 - 新增 6 个用例：设计一张造一张必须全绿；P2 缺机读块 / 空数组 / 缺 name / 重复表名 /
   非法 JSON 都要 FAIL；P3 少造、多造、SDS 目标表不在交付表里都要 FAIL。
 
+### Fixed（Python 下限从"声称"变成"验证过的"，ENG-002）
+
+README 写"Python 3.9+"，但没有任何地方机器可读地声明它，**CI 也只跑 3.11**——
+属于对外声明了一个没被验证过的下限，和之前版本号三处不一致是同一类问题。
+
+- CI 主 job 改成版本矩阵 `["3.9", "3.12"]`（3.9 是承诺的下限，3.12 对齐主力开发机），
+  两端都跑全量用例。原 hooks job 的 3.11 一并统一到 3.12。
+- `tests/test_repo_invariants.py` 新增两条：README 声明的下限必须出现在 CI 的
+  `python-version` 里（标量与矩阵写法都认）；用下限版本的语法 `ast.parse` 全部 29 个源文件，
+  提前拦住 3.10+ 才有的写法。
+- 加矩阵之前先做了本地预检，三项都干净：`ast.parse(feature_version=(3,9))` 全过、
+  没有 3.10+ 专属的标准库 API（`tomllib` / `itertools.pairwise` / `zip(strict=)` /
+  `dataclass(slots=True)` / `datetime.UTC` / `StrEnum` / `bit_count` / `file_digest` …）、
+  没有会运行时求值注解的写法（`cast` / `get_type_hints`），且**每个带注解的文件都带
+  `from __future__ import annotations`**（这条是 `str | None` 能在 3.9 上安全存在的唯一原因）。
+- 没有引入 `pyproject.toml`：这个仓库不是发行包（没人 `pip install` 它），
+  加一个 `[project]` 表反而会多出第 4 处手写版本号，正撞 DEVEX-002 的枪口。
+  "CI 矩阵 + README + 一致性测试"是等价且更强的方式——它验证而不是声明。
+
 ## [1.2.2] — 2026-09-11
 
 ### Added

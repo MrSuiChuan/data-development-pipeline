@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import re
@@ -30,6 +31,8 @@ CLAUDE_MANIFEST = ROOT_REPO / ".claude-plugin" / "plugin.json"
 CODEX_MANIFEST = ROOT_REPO / ".codex-plugin" / "plugin.json"
 CHANGELOG = ROOT_REPO / "CHANGELOG.md"
 ENGINE_MANIFEST = ROOT_REPO / "engine" / ".engine-manifest.json"
+CI_WORKFLOW = ROOT_REPO / ".github" / "workflows" / "ci.yml"
+SOURCE_DIRS = ("engine", "hooks", "tools", "tests")
 
 
 def load_module(name: str, path: Path) -> Any:
@@ -54,6 +57,62 @@ def changelog_released_version() -> str:
             continue
         return tag
     raise AssertionError("CHANGELOG 里找不到已发布版本小节")
+
+
+def readme_python_floor() -> tuple:
+    """README 里承诺的 Python 下限，形如 ``Python 3.9+``。"""
+    text = (ROOT_REPO / "README.md").read_text(encoding="utf-8")
+    match = re.search(r"Python (\d+)\.(\d+)\+", text)
+    if not match:
+        raise AssertionError("README.md 里找不到 'Python X.Y+' 形式的下限声明")
+    return int(match.group(1)), int(match.group(2))
+
+
+def ci_python_versions() -> set:
+    """ci.yml 里出现过的所有 python-version——标量和矩阵写法都要认。"""
+    tested = set()
+    for line in CI_WORKFLOW.read_text(encoding="utf-8").splitlines():
+        if "python-version:" in line:
+            tested.update(re.findall(r"(\d+\.\d+)", line))
+    return tested
+
+
+def source_files() -> list:
+    return [
+        path
+        for sub in SOURCE_DIRS
+        for path in sorted((ROOT_REPO / sub).rglob("*.py"))
+        if "__pycache__" not in path.parts
+    ]
+
+
+class PythonFloorTests(unittest.TestCase):
+    def test_readme_floor_is_a_version_ci_actually_runs(self) -> None:
+        """对外声明的下限，必须是 CI 里真跑过的版本（ENG-002）。"""
+        floor = "%d.%d" % readme_python_floor()
+        tested = ci_python_versions()
+        self.assertIn(
+            floor,
+            tested,
+            f"README 承诺 Python {floor}+，但 CI 只跑 {sorted(tested)}。"
+            "要么在 .github/workflows/ci.yml 的矩阵里加上这个版本，要么改 README 的声明——"
+            "不要留一个没被验证过的下限。",
+        )
+
+    def test_sources_parse_under_the_declared_floor(self) -> None:
+        """用下限版本的语法解析全部源码，提前拦住 3.10+ 才有的写法。"""
+        floor = readme_python_floor()
+        failures = []
+        for path in source_files():
+            try:
+                ast.parse(path.read_text(encoding="utf-8"), filename=str(path), feature_version=floor)
+            except SyntaxError as err:
+                failures.append(f"{path.relative_to(ROOT_REPO).as_posix()}:{err.lineno} {err.msg}")
+        self.assertEqual(
+            failures,
+            [],
+            f"以下文件用了 Python {floor[0]}.{floor[1]} 解析不了的语法：\n  " + "\n  ".join(failures),
+        )
 
 
 class VersionConsistencyTests(unittest.TestCase):
