@@ -105,7 +105,13 @@ class PythonFloorTests(unittest.TestCase):
         failures = []
         for path in source_files():
             try:
-                ast.parse(path.read_text(encoding="utf-8"), filename=str(path), feature_version=floor)
+                # 用 minor 整数形式（3.8 起的原始 API）。元组 (major, minor) 形式在旧版本上的
+                # 支持面更窄——这个测试自己要在 3.9 上跑，不能拿它当赌注。
+                ast.parse(
+                    path.read_text(encoding="utf-8"),
+                    filename=str(path),
+                    feature_version=floor[1],
+                )
             except SyntaxError as err:
                 failures.append(f"{path.relative_to(ROOT_REPO).as_posix()}:{err.lineno} {err.msg}")
         self.assertEqual(

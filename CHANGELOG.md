@@ -57,6 +57,25 @@
 - 新增 5 个回归用例：段首命令词的 6 种调用写法必须被拦、6 种只读提及必须放行、
   以及 3 个真触发 hook 的接线用例（拒绝 / 放行 / 快速通道）。
 
+### Fixed（CI：跨平台 hook 用例在 ubuntu 上误报失败）
+
+首次把仓库推上 GitHub 后，`test` job 的 ubuntu 两条腿（3.9 / 3.12）红了。
+根因不在代码，而在这条用例对"接线坏了"和"还没装好"没做区分：
+
+- `tests/test_hook_wiring.py` 直接执行 `hooks/*.json` 里的命令，而提交的默认值是
+  Windows 的 `py -3`。在 ubuntu 上该启动器不存在，命令返回非零、stdout 为空，
+  用例的 `assertEqual(proc.returncode, 0)` 就挂了。
+- 但"POSIX 上还没跑 `adapt_hooks.py`"是**已知且预期**的状态（README 安装第 3 步），
+  不是仓库缺陷。真正该抓的是"跑得起来但决策错了"。
+
+改法：`setUp` 里先看配置的启动器在不在本机 PATH 上，不在就 `skipTest` 并说明找
+`tools/adapt_hooks.py --check`。跨平台的真实验证仍在 CI 的 `hooks` job——
+它会先 adapt 再跑本用例，ubuntu 与 windows 两条腿都真的执行，不会 skip。
+
+顺手排掉一个同类隐患：`test_repo_invariants` 里的下限语法检查改用
+`feature_version=<minor 整数>`（3.8 起的原始 API），不再用元组形式——
+这个测试自己要在 3.9 上跑，不能拿旧版本对元组的支持面当赌注。
+
 ### Added（补上"改完代码怎么让宿主加载"这条路）
 
 原先仓库里没有一条可走的重新安装路径：`tools/build_codex_surface.py` 的注释要求版本

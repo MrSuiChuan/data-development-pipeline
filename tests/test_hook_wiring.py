@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -26,6 +27,11 @@ def pretooluse_command() -> str:
     return command.replace("${CLAUDE_PLUGIN_ROOT}", str(ROOT_REPO))
 
 
+def configured_launcher(command: str) -> str:
+    stripped = command.strip()
+    return stripped.split()[0] if stripped else ""
+
+
 class HookWiringTests(unittest.TestCase):
     """这些用例故意慢：每次都要真起一个 hook 进程。"""
 
@@ -33,6 +39,17 @@ class HookWiringTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         # 没有 .data-dev/ 的干净目录：setup_guard 的触发条件
         self.workdir = Path(self._tmp.name)
+        # hooks/*.json 的提交默认是 Windows 的 `py -3`。在 POSIX 上它是"还没装好"，
+        # 不是"接线坏了"——这两种状态必须分开：前者交给 adapt_hooks.py --check 报告，
+        # 后者才是本测试要抓的。CI 的 hooks job 会先 adapt 再跑本测试，
+        # 所以跨平台接线在那里是真的被验证过的。
+        launcher = configured_launcher(pretooluse_command())
+        if not shutil.which(launcher):
+            self.skipTest(
+                f"hooks 配置的启动器 {launcher!r} 在本机不存在，无法真实触发 hook。"
+                "这不是仓库的问题：hooks/*.json 默认是 Windows 的 `py -3`，"
+                "POSIX 上要先跑 `python3 tools/adapt_hooks.py`（`--check` 可体检）。"
+            )
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
