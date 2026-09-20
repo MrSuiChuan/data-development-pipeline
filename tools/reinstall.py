@@ -22,6 +22,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Windows 上 stdout 被重定向时是 cp1252/cp936，中文进度行会直接 UnicodeEncodeError。
+# 交互式控制台走 PEP 528 的宽字符 API，本来就支持中文，这里的 reconfigure 是空操作。
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / ".codex-plugin" / "plugin.json"
 MARKETPLACE = Path.home() / ".agents" / "plugins" / "marketplace.json"

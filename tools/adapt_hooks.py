@@ -24,6 +24,13 @@ import sys
 from pathlib import Path
 from typing import Any, List
 
+# Windows 上 stdout 被重定向（CI、管道、写文件）时用的是 cp1252/cp936，下面的中文进度行
+# 会直接 UnicodeEncodeError 把命令打挂——实测把 CI 的 windows job 打红过。
+# 交互式控制台走 PEP 528 的宽字符 API，本来就支持中文，这里的 reconfigure 是空操作。
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = Path(__file__).resolve().parent.parent
 HOOKS_FILES = (
     ROOT / "hooks" / "hooks.json",                 # Claude Code

@@ -15,7 +15,9 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import os
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -191,6 +193,32 @@ class EngineManifestTests(unittest.TestCase):
         expected = tool.build_manifest()
         sample = ROOT_REPO / "engine" / "core" / "context.py"
         self.assertEqual(expected["core/context.py"], engine_context.sha256_file(sample))
+
+
+class ToolOutputEncodingTests(unittest.TestCase):
+    """工具脚本在非 UTF-8 stdout 下不能崩。
+
+    CI 的 windows 运行器把 stdout 重定向成 cp1252，`adapt_hooks.py --check` 里的中文
+    进度行直接 UnicodeEncodeError，整个 job 打红。交互式控制台走 PEP 528 的宽字符 API
+    不受影响，所以这个坑**只在 CI / 管道 / 重定向时出现**——必须在测试里显式造出来，
+    否则本机永远复现不了。
+    """
+
+    def test_adapt_hooks_survives_non_utf8_stdout(self) -> None:
+        env = {**os.environ, "PYTHONIOENCODING": "cp1252"}
+        proc = subprocess.run(
+            [sys.executable, str(ROOT_REPO / "tools" / "adapt_hooks.py"), "--check"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=str(ROOT_REPO),
+            env=env,
+            timeout=180,
+        )
+        # --check 在启动器不可用的机器上返回非零是预期的；崩掉才是问题。
+        self.assertNotIn("Traceback", proc.stderr, proc.stderr)
+        self.assertNotIn("UnicodeEncodeError", proc.stderr, proc.stderr)
 
 
 if __name__ == "__main__":

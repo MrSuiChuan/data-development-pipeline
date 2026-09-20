@@ -76,6 +76,29 @@
 `feature_version=<minor 整数>`（3.8 起的原始 API），不再用元组形式——
 这个测试自己要在 3.9 上跑，不能拿旧版本对元组的支持面当赌注。
 
+### Fixed（CI：windows job 的中文输出把 job 打红）
+
+修完 ubuntu 之后 windows 那条腿还是红的，真因是**输出编码**：
+
+```
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 5-13
+  File "...\cp1252.py", line 19, in encode
+  print("hook 启动器在本机可用。")
+```
+
+Windows 运行器把 stdout 重定向后用的是 **cp1252**，编不出中文；`adapt_hooks.py --check`
+的进度行直接把命令打挂（exit 1）。交互式控制台走 PEP 528 的宽字符 API 不受影响，
+**所以这个坑只在 CI / 管道 / 重定向时出现**——本机怎么跑都是绿的。
+
+- `tools/{adapt_hooks,reinstall,wrap_marketplace}.py` 启动时把 stdout/stderr 重配成
+  UTF-8（`errors="replace"`）。交互式控制台本来就是 UTF-8，这步是空操作；
+  被重定向时则从"崩溃"变成"正确输出"。
+- 新增回归用例 `ToolOutputEncodingTests`：用 `PYTHONIOENCODING=cp1252` 真跑一次
+  `adapt_hooks.py --check`，断言 stderr 里没有 Traceback / UnicodeEncodeError。
+  这个条件必须显式造出来，否则本机永远复现不了。
+- 本机复现方式（与 CI 报错逐字一致）：
+  `$env:PYTHONIOENCODING="cp1252"; py -3 tools/adapt_hooks.py --check`
+
 ### Added（补上"改完代码怎么让宿主加载"这条路）
 
 原先仓库里没有一条可走的重新安装路径：`tools/build_codex_surface.py` 的注释要求版本
