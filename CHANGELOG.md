@@ -99,6 +99,21 @@ Windows 运行器把 stdout 重定向后用的是 **cp1252**，编不出中文�
 - 本机复现方式（与 CI 报错逐字一致）：
   `$env:PYTHONIOENCODING="cp1252"; py -3 tools/adapt_hooks.py --check`
 
+### Tests（跨插件契约：消费端）
+
+两个仓库都写着"knowledge-base-plugin 是 data-development-plugin 的上游"，但这条链
+**一个测试都没有**：本仓库的测试全部用手写的 `viking://resources/...` 字符串，从来没真接过
+一次知识库插件的产物。
+
+- 新增 `tests/test_kb_contract.py`（4 个用例）：按知识库插件写出的形状造索引，
+  断言 `MockKnowledgeClient.search()` 能按表名命中、`read(uri)` 返回 abstract、
+  越界 URI 被拒、消费侧真正读的四个字段（uri/domain/abstract/tables）都在。
+- 生产端的对应断言在 knowledge-base-plugin 的
+  `tests/test_engine.py::ConsumerContractTests`。两边各自对着同一份 schema 断言，
+  两个单仓 CI 都能钉住这条缝，不需要同时 checkout 两个仓库。
+- 另做了一次**真跨插件端到端**（两侧各起进程、通过文件系统交接）：知识库插件发布后，
+  本仓库确实搜到了 `viking://resources/domains/user/tables/ads_user_act_di.md`。
+
 ### Added（补上"改完代码怎么让宿主加载"这条路）
 
 原先仓库里没有一条可走的重新安装路径：`tools/build_codex_surface.py` 的注释要求版本
