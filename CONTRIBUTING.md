@@ -43,3 +43,18 @@ claude plugin validate .
 ## License
 
 MIT — see LICENSE.
+
+## Releasing
+
+1. Bump the base version in `.claude-plugin/plugin.json` (the only place it is
+   written by hand) and add a matching, non-`[Unreleased]` section at the top of
+   `CHANGELOG.md`. `tests/test_repo_invariants.py` checks that the Claude
+   manifest, the Codex manifest's base version and the newest released CHANGELOG
+   section all agree.
+2. Run `python tools/build_codex_surface.py` so the generated Codex manifest picks
+   up the new base version (it preserves the `+codex.<token>` cachebuster suffix).
+3. Run `python tools/reinstall.py` for a dry run, then `--apply` to bump the
+   cachebuster and reinstall locally. **The host caches plugins by version**, so
+   without the suffix change a reinstall copies the old files again.
+4. Open the plugin in a **new thread** — the host only loads the new version in a
+   fresh session.

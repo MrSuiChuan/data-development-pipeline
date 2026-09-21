@@ -2,8 +2,15 @@
 
 ## Reporting a vulnerability
 
-Please do not open a public issue for security problems. Contact the maintainers
-privately (email in the marketplace metadata) with a minimal reproducer.
+**首选：GitHub 私密漏洞报告** —— 打开仓库的 **Security** 标签页 →
+**Report a vulnerability**。这条路是私密的，只有维护者能看到，也支持贴最小复现。
+
+如果那个入口不可用，就在仓库里开一个 issue，**只写「需要私下联系」**，
+不要贴任何漏洞细节、复现步骤或数据样本；维护者会回你一个私下渠道。
+
+> 维护者须知：上面那条入口要在 **Settings → Security → Private vulnerability
+> reporting** 里开启，否则这段指引是死的。（原文写的是 "email in the marketplace
+> metadata"，而 `.claude-plugin/plugin.json` 里根本没有邮箱——指向了一个不存在的东西。）
 
 ## Security model（三层防线的强度不一样，请分清）
 
@@ -17,10 +24,17 @@ privately (email in the marketplace metadata) with a minimal reproducer.
 
 ## Known limits / non-goals（对抗式验收后如实记录）
 
-1. **hook 的命令判定是启发式，不是 shell 解释器。** 它会按分隔符切段、展开简单变量、
-   识别 `cd` 进入机器资产目录等常见写法（这些都是实测被绕过之后补的），但原则上仍可被更隐蔽的
-   写法绕过：`& $cmd` 间接调用、把写操作放进脚本文件再执行、用环境变量拼路径、
-   从别的目录写回受保护位置等。**不要把它当作安全边界**，它是"提高成本 + 留下痕迹"的防线。
+1. **hook 的命令判定是启发式，不是 shell 解释器。** 它按分隔符切段、展开简单变量、
+   识别 `cd` 进入机器资产目录等写法。下面这些原本被列为"可绕过"，**实测已经被拦住**，
+   并且 `tests/test_known_limits.py` 会一直盯着它们不再回退：
+
+   `& $c` 间接调用 · 环境变量拼路径 · 变量拼接出路径 · 从别的目录写回受保护位置 ·
+   `python -c "... .write_text(...)"` · 先 `cd` 进受保护目录再写 · 管道写出 ·
+   整条命令放进变量再 `iex`
+
+   **仍然开着的口子只剩一个**：把写操作放进一个脚本文件、再执行那个脚本——hook 只看得见
+   宿主暴露的那条命令，看不见脚本内容。**不要把它当作安全边界**，它是"提高成本 +
+   留下痕迹"的防线。
 2. **hook 只能看到宿主暴露的工具调用。** 子进程内部的副作用（脚本自己去连数据库、
    访问网络、写宿主看不到的位置）不在覆盖范围内；平台权限才是最后一道闸。
 3. **Live 模式的证据强度取决于数据源适配器。** 经 pymysql 类适配器执行时拿到的是

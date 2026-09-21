@@ -31,6 +31,9 @@ HOOKS = ROOT / "hooks"
 TEMPLATES = ROOT / "engine" / "templates"
 
 PLUGIN_NAME = "data-development-plugin"
+# 署名与 LICENSE 的 Copyright 保持一致；不用空 email 字段——SECURITY.md 之类的
+# 文档会因此指向一个不存在的东西（这条踩过）。
+PLUGIN_AUTHOR = "AI实战技能圈"
 CLAUDE_MANIFEST = ROOT / ".claude-plugin" / "plugin.json"
 
 
@@ -164,7 +167,7 @@ def build_codex_manifest() -> None:
             "通用离线数据任务研发流水线：六阶段状态机（SDS → 架构 → 研发 → 测试 → 部署 → 语义层）"
             "+ Hook 硬门控，强制按顺序交付机器证据。任务单/数据平台/质量/知识库均为可配置连接器。"
         ),
-        "author": {"name": "data-development-plugin maintainers"},
+        "author": {"name": PLUGIN_AUTHOR},
         "license": "MIT",
         "keywords": [
             "data-development",
@@ -184,7 +187,7 @@ def build_codex_manifest() -> None:
                 "阶段出口只认机器证据（执行账本 query_id、test_runs.json、[已确认发布] token）。"
                 "Claude Code 用斜杠命令，Codex 用 ddp-* 技能，两者共用同一引擎与 hook。"
             ),
-            "developerName": "data-development-plugin maintainers",
+            "developerName": PLUGIN_AUTHOR,
             "category": "Productivity",
             "capabilities": ["Instructions", "Lifecycle hooks", "Write"],
             "defaultPrompt": [

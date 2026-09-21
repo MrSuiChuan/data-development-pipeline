@@ -147,6 +147,29 @@ class VersionConsistencyTests(unittest.TestCase):
                 suffix.startswith("codex."), f"未知版本后缀：{suffix}（用 tools/reinstall.py 生成）"
             )
 
+    def test_author_name_agrees_across_license_and_manifests(self) -> None:
+        """署名三处必须一致，而且不留空 email。
+
+        原来 LICENSE 写 AI实战技能圈、两个清单写 data-development-plugin maintainers，
+        而 SECURITY.md 让人"联系 marketplace 元数据里的邮箱"——那个字段是空字符串。
+        文档指向一个不存在的东西，比没有指引更糟。
+        """
+        license_text = (ROOT_REPO / "LICENSE").read_text(encoding="utf-8")
+        match = re.search(r"Copyright \(c\) \d{4} (.+)", license_text)
+        self.assertIsNotNone(match, "LICENSE 里找不到 Copyright 行")
+        owner = match.group(1).strip()
+        for rel in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
+            data = json.loads((ROOT_REPO / rel).read_text(encoding="utf-8"))
+            author = data.get("author") or {}
+            self.assertEqual(author.get("name"), owner, f"{rel} 的署名与 LICENSE 不一致")
+            email = author.get("email")
+            if email is not None:
+                self.assertTrue(
+                    str(email).strip(),
+                    f"{rel} 的 author.email 是空字符串——SECURITY.md 之类的文档会指向一个"
+                    "不存在的东西。要么填真实邮箱，要么删掉这个字段。",
+                )
+
 
 class EngineManifestTests(unittest.TestCase):
     def test_manifest_matches_current_engine_files(self) -> None:
@@ -218,6 +241,22 @@ class ToolOutputEncodingTests(unittest.TestCase):
         )
         # --check 在启动器不可用的机器上返回非零是预期的；崩掉才是问题。
         self.assertNotIn("Traceback", proc.stderr, proc.stderr)
+        self.assertNotIn("UnicodeEncodeError", proc.stderr, proc.stderr)
+
+    def test_engine_help_survives_non_utf8_stdout(self) -> None:
+        """引擎的 HELP 是中文；windows 上把输出重定向就会撞 cp1252（实测崩过）。"""
+        env = {**os.environ, "PYTHONIOENCODING": "cp1252"}
+        proc = subprocess.run(
+            [sys.executable, str(ROOT_REPO / "engine" / "ddp.py"), "--help"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=str(ROOT_REPO),
+            env=env,
+            timeout=180,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertNotIn("UnicodeEncodeError", proc.stderr, proc.stderr)
 
 

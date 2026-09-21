@@ -3,8 +3,7 @@
   "description": "通用离线数据任务研发流水线插件：六阶段状态机（SDS 设计 -> 架构 -> 研发 -> 测试 -> 部署 -> 语义层）+ Hook 硬门控，强制 AI 按顺序交付机器证据。任务单/数据平台/质量/知识库均为可配置连接器，mock 开箱即用、live 对接任意 JSON CLI。命令：/submit /sds-design /start /copilot /resume /advance /status。",
   "version": "1.2.2",
   "author": {
-    "name": "data-development-plugin maintainers",
-    "email": ""
+    "name": "AI实战技能圈"
   },
   "license": "MIT",
   "keywords": [

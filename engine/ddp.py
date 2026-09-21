@@ -27,6 +27,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from core import clients, context, gates, spec, state, validators  # noqa: E402
 from core.state import Pipeline  # noqa: E402
 
+# Windows 上 stdout/stderr 被重定向（管道、写文件、CI）时用 cp1252/cp936，
+# HELP 与各种中文提示会直接 UnicodeEncodeError（实测 `--help` 就崩）。
+# 交互式控制台走 PEP 528 的宽字符 API，本来就支持中文，这步是空操作。
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT: Optional[Path] = None
 CONFIG: Dict[str, Any] = {}
 

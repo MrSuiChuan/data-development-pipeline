@@ -114,6 +114,41 @@ Windows 运行器把 stdout 重定向后用的是 **cp1252**，编不出中文�
 - 另做了一次**真跨插件端到端**（两侧各起进程、通过文件系统交接）：知识库插件发布后，
   本仓库确实搜到了 `viking://resources/domains/user/tables/ads_user_act_di.md`。
 
+### Fixed（SECURITY.md 的"已知边界"已经过期，报告渠道是死的）
+
+写 `tests/test_known_limits.py` 时把文档里的声明逐条跑了一遍，结果两个问题：
+
+- **报告渠道指向空气**：原文让人"联系 marketplace 元数据里的邮箱"，而
+  `.claude-plugin/plugin.json` 的 `author.email` 是**空字符串**。改为指向 GitHub 的
+  **Report a vulnerability**（私密、可贴最小复现），并给了入口不可用时的替代路径；
+  维护者须知里写清那个入口要在 Settings → Security 里开启。
+- **已知边界清单过期**：原文列的四条"可绕过"实测**三条早就拦住了**——
+  `& $c` 间接调用、环境变量拼路径、从别的目录写回。逐条实测后重写成准确版本，
+  并新增 `tests/test_known_limits.py`：已拦住的 8 种形态当回归保护，唯一还开着的
+  （把写操作放进脚本文件再执行）当"已知上限"钉住——改任一侧都会红。
+
+### Fixed（署名统一 + 英文门面）
+
+- LICENSE 写「AI实战技能圈」、两个清单写「data-development-plugin maintainers」；
+  现在统一成 LICENSE 的署名，并删掉空的 `author.email` 字段。
+  新增不变量断言：署名三处一致，且 `email` 要么填真值要么不存在——空字符串正是
+  SECURITY.md 指向空气的原因。
+- `README.en.md` 从 "A Claude Code plugin" 改成双宿主，补了安装三条
+  （含 **macOS/Linux 必须跑 `adapt_hooks.py`** 这条），并链到 SECURITY / CONTRIBUTING / CHANGELOG。
+
+### Added（开源标配）
+
+- `.github/ISSUE_TEMPLATE/bug_report.md`：第一段就要求先跑 `adapt_hooks.py --check` 与全量测试
+  ——这两条能把"本机没装好"和"插件真坏了"分开，正是这一路反复撞的那类问题。
+- `.github/PULL_REQUEST_TEMPLATE.md`：自查项与 CONTRIBUTING 的三道门一一对应。
+- CONTRIBUTING 新增 Releasing 一节：版本号唯一来源、cachebuster、新线程生效。
+
+### Fixed（引擎在非 UTF-8 输出下会崩）
+
+`py -3 engine/ddp.py --help` 在 cp1252 下直接 UnicodeEncodeError（实测）——和刚修好的
+`adapt_hooks.py` 是同一个坑：HELP 与中文提示在被重定向时编不出来。引擎启动时同样把
+stdout/stderr 重配成 UTF-8；回归用例扩展为 `test_engine_help_survives_non_utf8_stdout`。
+
 ### Added（补上"改完代码怎么让宿主加载"这条路）
 
 原先仓库里没有一条可走的重新安装路径：`tools/build_codex_surface.py` 的注释要求版本
