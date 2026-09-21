@@ -2,15 +2,22 @@
 
 ## Reporting a vulnerability
 
-**首选：GitHub 私密漏洞报告** —— 打开仓库的 **Security** 标签页 →
-**Report a vulnerability**。这条路是私密的，只有维护者能看到，也支持贴最小复现。
+**先说清现状**：这批仓库目前是**私有的**，而私有仓库**没有** GitHub 的
+"Report a vulnerability" 入口（那个功能属于 Advanced Security，私有仓库用不了）。
+所以现在这么走：
 
-如果那个入口不可用，就在仓库里开一个 issue，**只写「需要私下联系」**，
-不要贴任何漏洞细节、复现步骤或数据样本；维护者会回你一个私下渠道。
+- **你已经有仓库权限** → 直接开一个 issue、打上 `security` 标签，在里面贴最小复现。
+  私有仓库的 issue 只有协作者能看到。
+- **你没有仓库权限** → 走你手上已有的私下渠道联系维护者。
 
-> 维护者须知：上面那条入口要在 **Settings → Security → Private vulnerability
-> reporting** 里开启，否则这段指引是死的。（原文写的是 "email in the marketplace
-> metadata"，而 `.claude-plugin/plugin.json` 里根本没有邮箱——指向了一个不存在的东西。）
+**等本仓库转为公开之后**，维护者去 **Settings → Security** 打开
+**Private vulnerability reporting**，仓库的 **Security** 标签页才会出现
+**Report a vulnerability** —— 那条路更省事（不要求报告者先有仓库权限），
+但**它现在不存在**，别按它操作。
+
+> 维护者须知：这段指引在 2026-09-21 前后被改过两次——第一次指向"marketplace 元数据里的
+> 邮箱"（那个字段是空的），第二次指向 GitHub 私密报告（私有仓库里没这个入口）。
+> **改这一块之前先确认那个入口真的存在，不要照着习惯写。**
 
 ## Security model（三层防线的强度不一样，请分清）
 
