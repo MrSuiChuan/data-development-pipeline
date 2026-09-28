@@ -212,6 +212,11 @@ def default_config() -> Dict[str, Any]:
             "layer_policy": "enabled",  # enabled | disabled
             "prefixes": ["ods", "dwd", "dws", "ads", "dim", "mid"],
         },
+        # 调度目标：决定 dp_task 的调度注解怎么校验（见 engine/core/schedulers.py）
+        # cron | airflow | dolphinscheduler | dataworks | none（none = 纯执行引擎，不要求调度注解）
+        "scheduler": {
+            "kind": "cron",
+        },
         # P6 语义层开关：没有语义层/元数据目标的项目可关（P6 降级为交付登记）
         "semantic": {
             "enabled": True,

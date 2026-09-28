@@ -717,18 +717,21 @@ def verb_sql(flags: Dict[str, str]) -> None:
     sql_format = str(flags.get("format") or (CONFIG.get("platform") or {}).get("format") or "").strip()
     if sql_format.lower() in ("none", ""):
         sql_format = ""
+    scheduler_kind = str(flags.get("scheduler") or (CONFIG.get("scheduler") or {}).get("kind") or "cron").strip()
     issues = validators.sql_compliance_check(
         text,
         filename=Path(filename).name,
         is_dp_task=bool(flags.get("task")),
         dialect=dialect,
         sql_format=sql_format or None,
+        scheduler=scheduler_kind,
     )
     emit(
         {
             "ok": not validators.has_blockers(issues),
             "dialect": dialect,
             "format": sql_format or "none",
+            "scheduler": scheduler_kind,
             "issues": validators.issues_to_dicts(issues),
         }
     )
@@ -1617,6 +1620,7 @@ verbs:
   evidence verify|selfcheck|confirm [--ticket <id>]   # 证据键只能由此写
   sql check --text '...' | --file x.sql [--task] [--dialect <hive|spark|doris|clickhouse|...>]
   sql check ... [--format <iceberg|hudi|paimon|delta>]     # 湖表格式检查（缺省读 platform.format）
+  sql check ... [--scheduler <cron|airflow|dolphinscheduler|dataworks|none>]   # 调度注解校验
   ddl render --spec <json> [--dialect <id>] [--format <id>] [--out ddl/x.sql] [--force]
   ddl types                                  # 列出 canonical 类型与有映射的方言
   platform doctor                            # 配置体检：kind/必填键/profiles/明文口令

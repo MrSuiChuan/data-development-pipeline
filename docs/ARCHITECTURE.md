@@ -117,6 +117,12 @@
 
 软提醒 8 条（WARN）：WHERE 过滤、超长行、分号、CTE、聚合、table 注解、分区字段、多语句。
 
+第 8 条（dp_task 的调度注解）按 `config.scheduler.kind` 分目标校验（COMPAT-010）：
+`cron`（默认，只要非空 `-- schedule:`，与改动前逐字一致）、`airflow`/`dolphinscheduler`
+（追加必填 `-- schedule-id:`，建议 `-- schedule-timezone:`）、`dataworks`（建议 `-- schedule-depends:`）、
+`none`（无调度器：不要求注解，写了则 WARN 提醒没人消费）。规则表在 `engine/core/schedulers.py`，
+未知 kind 直接 FAIL 并列出可用项。
+
 ### 引擎维度：注册表 + 按方言的规则（COMPAT-001/002/003）
 
 基线 17 项是**引擎无关的离线纪律**；"这条 SQL 在这个引擎上成不成立"是另一层，落在

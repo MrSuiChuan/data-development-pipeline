@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import context, dialects, engines, formats
+from . import context, dialects, engines, formats, schedulers
 
 LEVELS = ("L0", "L1", "L2", "L3")
 SUMMARY_LAYERS = ("dws", "ads", "app")
@@ -104,6 +104,79 @@ def execution_evidence_ok(ev: Any, limits: Optional[Dict[str, Any]] = None) -> t
     if age_hours > max_hours:
         return False, f"执行证据已过期（{age_hours:.1f}h > {max_hours:g}h），需重新真跑"
     return True, ""
+
+
+def _schedule_issues(
+    annotations: Dict[str, str], phase: int, filename: str, scheduler: Optional[str]
+) -> List[Issue]:
+    """第 8 条规则的调度目标变体（COMPAT-010）。
+
+    默认目标 cron：只要有非空 `-- schedule:` 就通过——与改动前的行为逐字一致。
+    none：项目没有调度器，不要求注解；写了注解则 WARN（提醒没人消费它）。
+    其他目标：缺必填注解 FAIL，缺建议注解 WARN。
+    """
+    issues: List[Issue] = []
+    try:
+        spec = schedulers.resolve(scheduler)
+    except ValueError as err:
+        issues.append(
+            Issue("sql.compliance.scheduler_unknown", phase, "FAIL", str(err), rule=8, file=filename)
+        )
+        return issues
+
+    schedule = str(annotations.get("schedule") or "").strip()
+    if spec.kind == "none":
+        if schedule:
+            issues.append(
+                Issue(
+                    "sql.compliance.schedule_unused",
+                    phase,
+                    "WARN",
+                    "scheduler.kind=none（无调度器）：这条 -- schedule: 注解不会被任何调度消费",
+                    rule=8,
+                    file=filename,
+                )
+            )
+        return issues
+
+    if not schedule:
+        issues.append(
+            Issue(
+                "sql.compliance.no_schedule",
+                phase,
+                "FAIL",
+                "dp_task 周期任务缺 -- schedule: 注解",
+                rule=8,
+                file=filename,
+            )
+        )
+        return issues
+
+    for key in spec.requires:
+        if not str(annotations.get(key) or "").strip():
+            issues.append(
+                Issue(
+                    f"sql.compliance.schedule_required.{key}",
+                    phase,
+                    "FAIL",
+                    f"{spec.label} 需要 -- {key}: 注解（{spec.note}）",
+                    rule=8,
+                    file=filename,
+                )
+            )
+    for key in spec.recommends:
+        if not str(annotations.get(key) or "").strip():
+            issues.append(
+                Issue(
+                    f"sql.compliance.schedule_recommended.{key}",
+                    phase,
+                    "WARN",
+                    f"{spec.label} 建议补 -- {key}: 注解（{spec.note}）",
+                    rule=8,
+                    file=filename,
+                )
+            )
+    return issues
 
 
 def evidence_level_issues(ev: Any, phase: int, file: str) -> List[Issue]:
@@ -517,11 +590,16 @@ def validate_sds_design(
 # 2. SQL compliance checker (17 checks, 9 zero-tolerance)
 # ======================================================================
 def _extract_annotations(text: str) -> Dict[str, str]:
+    """SQL 头部注解：任意 `-- key: value`，key 允许连字符（schedule-timezone 之类），
+    value 取整行剩余内容（cron 表达式本身就是多段，截到第一个空格会丢信息）。
+
+    非 ASCII 开头的注释（中文说明）不会被当成注解；重复键取首次出现（与改动前一致）。
+    """
     out: Dict[str, str] = {}
-    for key in ("table", "source", "schedule", "env"):
-        m = re.search(rf"^\s*--\s*{key}\s*[:=]\s*(\S+)", text, re.IGNORECASE | re.MULTILINE)
-        if m:
-            out[key] = m.group(1).strip()
+    for match in re.finditer(
+        r"^\s*--\s*([A-Za-z][A-Za-z0-9-]*)\s*[:=]\s*(.+?)\s*$", text, re.MULTILINE
+    ):
+        out.setdefault(match.group(1).strip().lower(), match.group(2).strip())
     return out
 
 
@@ -542,6 +620,7 @@ def sql_compliance_check(
     ddl_targets: Optional[Sequence[str]] = None,
     dialect: Optional[str] = None,
     sql_format: Optional[str] = None,
+    scheduler: Optional[str] = None,
 ) -> List[Issue]:
     """17 rules. Rules 1..9 are zero-tolerance; 10..17 are WARN quality checks.
 
@@ -665,17 +744,8 @@ def sql_compliance_check(
             )
         )
 
-    if is_dp_task and not annotations.get("schedule"):
-        issues.append(
-            Issue(
-                "sql.compliance.no_schedule",
-                phase,
-                "FAIL",
-                "dp_task 周期任务缺 -- schedule: 注解",
-                rule=8,
-                file=filename,
-            )
-        )
+    if is_dp_task:
+        issues.extend(_schedule_issues(annotations, phase, filename, scheduler))
 
     if "INSERT" in upper or "CREATE TABLE" in upper:
         if not annotations.get("source") and not re.search(r"\bFROM\b", upper):
@@ -746,17 +816,19 @@ def project_engine_settings(req_dir: Path) -> Dict[str, Optional[str]]:
     推导不出来就返回 None（只用基线 17 项）。未登记 kind/format 的报错责任在
     `platform doctor` / `make_platform` / `ddl render`，不在这里制造第二个错误面。
     """
-    settings: Dict[str, Optional[str]] = {"dialect": None, "format": None}
+    settings: Dict[str, Optional[str]] = {"dialect": None, "format": None, "scheduler": None}
     node = Path(req_dir)
     for _ in range(4):
         node = node.parent
         if (node / ".data-dev" / "config.json").is_file():
-            platform = context.load_config(node).get("platform") or {}
+            config = context.load_config(node)
+            platform = config.get("platform") or {}
             kind = str(platform.get("kind") or "cli")
             fmt = str(platform.get("format") or "none").strip().lower()
             if fmt in ("", "none"):
                 fmt = ""
             settings["format"] = fmt or None
+            settings["scheduler"] = str((config.get("scheduler") or {}).get("kind") or "cron").strip().lower()
             try:
                 settings["dialect"] = engines.dialect_of(kind)
             except engines.UnknownEngine:
@@ -770,13 +842,20 @@ def project_dialect(req_dir: Path) -> Optional[str]:
     return project_engine_settings(req_dir)["dialect"]
 
 
-def scan_sql_tree(req_dir: Path, dialect: Optional[str] = None, sql_format: Optional[str] = None) -> List[Issue]:
+def scan_sql_tree(
+    req_dir: Path,
+    dialect: Optional[str] = None,
+    sql_format: Optional[str] = None,
+    scheduler: Optional[str] = None,
+) -> List[Issue]:
     """Run the 17-rule compliance scan over ddl/ etl/ dp_task/（外加该引擎的方言规则）。"""
     issues: List[Issue] = []
     if dialect is None:
         dialect = project_dialect(req_dir)
     if sql_format is None:
         sql_format = project_engine_settings(req_dir)["format"]
+    if scheduler is None:
+        scheduler = project_engine_settings(req_dir)["scheduler"]
     ddl_targets = [p.stem for p in (req_dir / "ddl").glob("*.sql")] if (req_dir / "ddl").is_dir() else []
     for sub, is_task in (("ddl", False), ("etl", False), ("dp_task", True)):
         base = req_dir / sub
@@ -792,6 +871,7 @@ def scan_sql_tree(req_dir: Path, dialect: Optional[str] = None, sql_format: Opti
                     ddl_targets=ddl_targets if sub != "ddl" else None,
                     dialect=dialect,
                     sql_format=sql_format,
+                    scheduler=scheduler,
                 )
             )
     return issues

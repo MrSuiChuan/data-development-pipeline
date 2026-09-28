@@ -306,6 +306,19 @@ live 模式有三种传输（`knowledge.kind`，默认 `auto`）：
   前缀要求；纯 MySQL/Doris/Paimon 等无分层场景设为 `disabled`。
 - `config.semantic.enabled`：默认 `true`（metric-dev 必进语义层）；没有语义层/
   元数据目标的项目设为 `false`，P6 只做交付登记。
+- `config.scheduler.kind`：调度目标（默认 `cron`），决定 dp_task 的调度注解怎么校验：
+
+  | kind | 要求 | 说明 |
+  | --- | --- | --- |
+  | `cron`（默认） | 非空 `-- schedule:` | 与改动前逐字一致；cron 语义与时区由平台侧负责 |
+  | `airflow` | `-- schedule:` + `-- schedule-id:`（建议 `-- schedule-timezone:`） | Airflow 默认 UTC：不写时区就按 UTC 解释 |
+  | `dolphinscheduler` | `-- schedule:` + `-- schedule-id:`（工作流名） | 工作流与任务同名约定要显式写 |
+  | `dataworks` | `-- schedule:`（建议 `-- schedule-depends:`） | 依赖上游产出，便于调度侧配依赖 |
+  | `none` | 不要求调度注解 | 纯执行引擎（MySQL/Doris/Paimon…）；写了注解会 WARN 提醒没人消费 |
+
+  注解写法是 SQL 头部注释：`-- schedule: 0 2 * * *`、`-- schedule-timezone: Asia/Shanghai`、
+  `-- schedule-id: <dag 或工作流名>`、`-- schedule-depends: <上游表或任务>`。
+  未登记的 `scheduler.kind` 会 FAIL 并列出可用项。
 - `deploy_plan.env`：支持 `dev/test/qa/staging/prod`。只有 `prod` 需要
   `[已确认发布]` token、AskUserQuestion 三道确认门与工单流转；非生产直接执行
   并留证据（不调 tracker 流转）。

@@ -34,6 +34,10 @@ description: P3 数据研发方法论：自底向上开发、DDL→ETL→dp_task
   未登记的 kind/组合一律报错并列出可用项——**不要**按"差不多能跑"往下写。
 - 建表不要凭记忆抄类型：`ddl render --spec <json> [--dialect <id>] [--format <id>]` 出该引擎的
   起始模板（含类型映射与注释/键/属性语法差异）；渲染产物只是模板，仍须过 `sql check` 与真实执行。
+- dp_task 的调度注解按 `config.scheduler.kind` 校验：`cron`（默认）只要非空
+  `-- schedule:`；`airflow` / `dolphinscheduler` 还要 `-- schedule-id:`（建议带
+  `-- schedule-timezone:`，否则按调度器默认时区解释）；`dataworks` 建议带 `-- schedule-depends:`；
+  纯执行引擎（`none`）不要求调度注解。缺必填注解是 FAIL，缺建议注解是 WARN。
 
 ## 证据纪律
 

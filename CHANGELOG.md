@@ -36,6 +36,11 @@
   `ddl render` 按格式插建表片段（spark `USING iceberg`、Flink 注入 `connector`、Trino 说明 catalog），
   `sql check --format` 与 P3 出口门出格式相关的 WARN（Hudi 缺 `primaryKey`、Delta 的 `VACUUM`、
   Iceberg 行级 `DELETE`、Paimon 缺 `bucket`）。格式检查**不阻断**流水线——它们表达"有条件成立"。
+- **调度目标 `engine/core/schedulers.py` + `config.scheduler.kind`**：dp_task 的调度注解按目标校验——
+  `cron`（默认，与非空 `-- schedule:` 的旧行为逐字一致）、`airflow`/`dolphinscheduler`
+  （追加必填 `-- schedule-id:`，建议 `-- schedule-timezone:`）、`dataworks`（建议 `-- schedule-depends:`）、
+  `none`（纯执行引擎：不要求调度注解，写了则 WARN 提醒没人消费）；未知 kind FAIL 并列出可用项。
+  注解解析同时升级为"取整行"（cron 表达式是多段，旧的单 token 解析会丢信息）。
 - **证据级别写进回执**：dbapi/command 族的回执带 `evidence_level=local_receipt`
   （只证明本机执行过，不等于平台 query_id）；CLI 契约族是 `server_query_id`。
 - 新增 `tests/test_engines.py`（23 条）：注册表结构自检、投影唯一性、未登记 kind 的硬错误、
