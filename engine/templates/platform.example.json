@@ -1,0 +1,74 @@
+{
+  "_README": [
+    "platform 段的分族示例：把其中一个对象整段拷进 <项目>/.data-dev/config.json 的 platform 字段即可。",
+    "每个示例都能过 `ddp.py platform doctor`（py -3 engine/ddp.py --root <项目> platform doctor）。",
+    "密钥一律走 platform.password_env 指向的环境变量，不要把明文写进 config.json。",
+    "kind 清单以 engine/core/engines.py 为唯一权威；未登记的 kind 会被硬报错。"
+  ],
+  "dbapi_mysql_protocol": {
+    "kind": "doris",
+    "host": "127.0.0.1",
+    "port": 9030,
+    "user": "root",
+    "password_env": "DDP_PLATFORM_PASSWORD",
+    "database": "ods",
+    "base_env": "dev",
+    "profiles": {
+      "prod": {"host": "prod-doris.internal", "database": "ods"}
+    }
+  },
+  "command_hive": {
+    "kind": "hive",
+    "command": {
+      "engine": "hive",
+      "run": ["beeline", "-n", "{user}", "-f", "{file}"],
+      "check": ["beeline", "-n", "{user}", "-e", "EXPLAIN {sql}"],
+      "timeout": 900
+    },
+    "base_env": "dev",
+    "profiles": {
+      "prod": {"command": {"engine": "hive", "run": ["beeline", "-n", "{user}", "-f", "{file}"]}}
+    }
+  },
+  "command_clickhouse": {
+    "kind": "clickhouse",
+    "command": {
+      "engine": "clickhouse",
+      "run": ["clickhouse-client", "--multiquery", "--queries-file", "{file}"],
+      "timeout": 600
+    }
+  },
+  "command_spark": {
+    "kind": "spark",
+    "command": {
+      "engine": "spark",
+      "run": ["spark-sql", "-f", "{file}"],
+      "timeout": 1800
+    }
+  },
+  "command_trino": {
+    "kind": "trino",
+    "command": {
+      "engine": "trino",
+      "run": ["trino", "--file", "{file}"],
+      "timeout": 900
+    }
+  },
+  "command_odps": {
+    "kind": "odps",
+    "command": {
+      "engine": "odps",
+      "run": ["odpscmd", "-f", "{file}"],
+      "timeout": 1800
+    }
+  },
+  "cli_json_contract": {
+    "kind": "cli",
+    "base_env": "dev",
+    "profiles": {"prod": {}}
+  },
+  "mcp_reserved": {
+    "kind": "mcp",
+    "mcp": {"server": "<mcp-server-name>", "tools": {"run_sql": "run_sql"}, "evidence_required": true}
+  }
+}

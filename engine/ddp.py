@@ -24,7 +24,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from core import clients, context, gates, spec, state, validators  # noqa: E402
+from core import clients, context, engines, gates, spec, state, validators  # noqa: E402
 from core.state import Pipeline  # noqa: E402
 
 # Windows 上 stdout/stderr 被重定向（管道、写文件、CI）时用 cp1252/cp936，
@@ -694,12 +694,28 @@ def verb_sql(flags: Dict[str, str]) -> None:
     if not text:
         print("sql check 需要 --text 或 --file", file=sys.stderr)
         sys.exit(2)
+    # 方言：显式 --dialect 优先；否则按配置（platform.kind）推导。
+    # 推不出来或未登记一律退回 generic —— 那正是改动前的行为（只跑基线 17 项）。
+    dialect = str(flags.get("dialect") or "").strip()
+    if not dialect:
+        try:
+            dialect = engines.dialect_from_config(CONFIG)
+        except engines.UnknownEngine as err:
+            print(f"[配置] {err}", file=sys.stderr)
+            dialect = "generic"
     issues = validators.sql_compliance_check(
         text,
         filename=Path(filename).name,
         is_dp_task=bool(flags.get("task")),
+        dialect=dialect,
     )
-    emit({"ok": not validators.has_blockers(issues), "issues": validators.issues_to_dicts(issues)})
+    emit(
+        {
+            "ok": not validators.has_blockers(issues),
+            "dialect": dialect,
+            "issues": validators.issues_to_dicts(issues),
+        }
+    )
     if validators.has_blockers(issues):
         sys.exit(1)
 
@@ -709,8 +725,15 @@ def verb_platform(flags: Dict[str, str]) -> None:
     sub = flags.get("sub", "") or flags.get("1", "")
     name = flags.get("name", "")
     if not sub:
-        print("platform 子命令: run-sql|check-grammar|create-task|read-task|update-task|submit|publish|backfill")
+        print("platform 子命令: doctor|run-sql|check-grammar|create-task|read-task|update-task|submit|publish|backfill")
         sys.exit(2)
+    if sub in ("doctor", "diagnose"):
+        # 配置体检：只判"配没配对"，不判"连不连得上"（连通性只有真跑才知道）。
+        report = engines.diagnose_platform(CONFIG.get("platform") or {})
+        emit(report)
+        if not report.get("ok"):
+            sys.exit(1)
+        return
     sql_text = flags.get("sql", "")
     if flags.get("file"):
         sql_text = context.read_text(Path(flags["file"]))
@@ -1520,7 +1543,8 @@ verbs:
   engine sync --from <plugin-engine-root>  # /setup 用：同步引擎副本
   ctx set --key k [--value v] | ctx list      # 机器证据键除外，只能用 evidence
   evidence verify|selfcheck|confirm [--ticket <id>]   # 证据键只能由此写
-  sql check --text '...' | --file x.sql [--task]
+  sql check --text '...' | --file x.sql [--task] [--dialect <hive|spark|doris|clickhouse|...>]
+  platform doctor                            # 配置体检：kind/必填键/profiles/明文口令
   platform run-sql|check-grammar|create-task|read-task|update-task|submit|publish|backfill ...
   kb search --query ... | read --uri viking://resources/...
   baseline capture|show [--ticket <id>]       # live：从平台读回已发布任务代码作线上基准

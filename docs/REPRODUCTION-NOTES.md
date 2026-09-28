@@ -168,6 +168,31 @@ Paimon / Flink 示例（把 SQL 交给 flink sql 客户端执行；`{file}` 会�
 用引擎直连/CLI 适配器**。同一套六阶段流程与硬门不因通道改变——这也是
 `PlatformClient` 接口存在的意义。
 
+**引擎清单只有一份权威**：`engine/core/engines.py`。每个 `platform.kind` 在那里登记
+执行族（dbapi / command / cli / mcp）、方言、必填配置键、默认端口、证据级别与可用湖表格式。
+配之前先体检：
+
+```bash
+py -3 .data-dev/engine/ddp.py platform doctor       # 缺键/未登记 kind/明文口令/profiles 形状
+py -3 .data-dev/engine/ddp.py sql check --file ddl/ads_x_di.sql --dialect hive
+```
+
+`platform doctor` 只判"配没配对"，不判"连不连得上"——连通性只有真跑才知道。
+分族配置示例见 `engine/templates/platform.example.json`（dbapi / command / cli / mcp / 各引擎）。
+
+**证据级别**（写进回执，报告里照实写，不可混用）：
+
+| 级别 | 谁产生 | 能证明什么 | 典型 kind |
+| --- | --- | --- | --- |
+| `server_query_id` | 平台返回服务端 query id | "平台侧查到过这次执行" | `cli`（JSON stdout 契约） |
+| `local_receipt` | 本进程自造回执（`run_<hash>`） | 只证明"这条 SQL 在本机执行过" | 全部 dbapi / command 族 |
+| `none` | 不产生 | 不产生执行证据 | `mcp`（预留给会话内通道） |
+
+按方言的 SQL 规则（`engine/core/dialects.py`）与基线 17 项的关系：基线跨引擎恒成立，
+方言规则只在显式给出 `--dialect`（或能按 `platform.kind` 推导）时叠加；不给就与旧行为一致。
+例：Hive 的 UPDATE/DELETE、Trino 的 INSERT OVERWRITE、MaxCompute 的行级写是 FAIL；
+Doris/StarRocks/Spark/PostgreSQL 的条件性写法是 WARN + 修复建议。
+
 CLI 模板除 `{file}` 外还支持内联占位：`{sql}`、`{host}`、`{port}`、`{user}`、
 `{database}`，例如用 mysql 客户端连 Doris/MySQL：
 

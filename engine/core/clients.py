@@ -20,12 +20,14 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from . import context, ov_knowledge
+from . import context, engines, ov_knowledge
 
 ALLOWED_KB_PREFIX = "viking://resources/"
 STAGE_ORDER = ["已提交", "开发中", "待验收", "待测试", "待业务验收", "已交付", "待发布"]
-SQL_PLATFORM_KINDS = ("mysql", "doris", "starrocks", "tidb", "oceanbase", "generic-sql")
-COMMAND_PLATFORM_KINDS = ("paimon", "flink", "spark", "trino", "presto", "command")
+# 两个元组不再是"第二份引擎清单"，只是注册表（engine/core/engines.py）的投影。
+# 加引擎只改注册表；这里保留名字是因为仓库内外都按这两个名字引用。
+SQL_PLATFORM_KINDS = engines.kinds_for_family(engines.FAMILY_DBAPI)
+COMMAND_PLATFORM_KINDS = engines.kinds_for_family(engines.FAMILY_COMMAND)
 
 
 def kb_prefix(config: Optional[Dict[str, Any]] = None) -> str:
@@ -413,17 +415,22 @@ def make_platform(config: Dict[str, Any], root: Path) -> PlatformClient:
     if mode == "live":
         from . import sql_platforms  # local import avoids circular dependency
 
-        if kind in SQL_PLATFORM_KINDS:
+        try:
+            spec = engines.resolve(kind)
+        except engines.UnknownEngine as err:
+            # 静默落回 LivePlatformClient 会让证据语义悄悄降级（未知 kind 被当成 CLI 契约），
+            # 所以这里必须是硬错误，并把可用 kind 一起报出来。
+            raise ClientError(str(err))
+        if spec.family == engines.FAMILY_DBAPI:
             return sql_platforms.SqlPlatformClient(config, root)
-        if kind in COMMAND_PLATFORM_KINDS:
+        if spec.family == engines.FAMILY_COMMAND:
             return sql_platforms.CommandPlatformClient(config, root)
-        if kind == "mcp":
+        if spec.family == engines.FAMILY_MCP:
             raise ClientError(
                 "kind=mcp 是预留的会话内通道：请由 Claude Code 模型调用 "
                 "mcp__<server>__<tool>，引擎 CLI 不支持直调。接入契约见 "
                 "docs/REPRODUCTION-NOTES.md 1.2.2。"
             )
-    if mode == "live":
         return LivePlatformClient(config, root)
     return MockPlatformClient(root)
 

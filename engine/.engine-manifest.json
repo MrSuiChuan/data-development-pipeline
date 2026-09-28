@@ -3,17 +3,20 @@
   "files": {
     "__init__.py": "46ea7e7beab8bf0d28cdcf5a04866e27e2e37c6f074d46783d2fcc12829446dd",
     "core/__init__.py": "70a4744e9abec680b341fc542e0d42e06a1c2ac6ec4b3796be97152d2eb2b190",
-    "core/clients.py": "23cc28b95e235af979afb7d4f5b9426ac4bbe72b19b215b4996799c2214b16f7",
-    "core/context.py": "39564e04578fd7b47db97d478432d4148c2e7c3c5774ad859d3a1f7110a02cdb",
+    "core/clients.py": "ed2c23744f3d79a84a122e64a351c2df08f9fc11b188f7963857b2f46de2a412",
+    "core/context.py": "c917e9adc3ed269d64c4ef61f07b43d32b808f456dcb460bfe4bc46326a4ff9e",
+    "core/dialects.py": "b81b6508f9426c25d8c3a6fd716f604b2314d366f1ab7ba16d02d164d025a46e",
+    "core/engines.py": "2cf338339e28a6e93882a142f0463fba2c469d9c08ee50b5a29acfa909d2d7c6",
     "core/gates.py": "9101b095ab20f7213ce4c4985d645de7ef2f3417ebd99a52d43a47d232a3164e",
     "core/ov_knowledge.py": "73d8b7071f9e0c1de040a79036f3b69bad71e086efb4b32ffe7711ef38956d94",
     "core/spec.py": "d5d4771203f41da462331097b563d2b57c460c5ee48d5141c61558e62a50a66a",
-    "core/sql_platforms.py": "ef22c43e63536531816b2220e1b71c6edbd240d36b261ff3d3ed83ce2f56d5a3",
+    "core/sql_platforms.py": "75d99740fb89c98a2dcf48a32382fbf92122e4a5a5cf86ff85c9ceeec86526ae",
     "core/state.py": "3ee78bb9936536764efe998e2d930105ce25469f5f30e43d11bf4446a00a7771",
-    "core/validators.py": "5ae745db5b6c039c0930c50daa493d1c1aae3a91a59b9c204918b930dd9420de",
-    "ddp.py": "9fb4f0b0c17fcc402af0cecfe4d6046324ad8d001b58cfec359741b7a0d3df9f",
+    "core/validators.py": "cb38cb738a35e104e7620bebf19451eb3e8caf72c75a2dba5a2810854d2fb6b3",
+    "ddp.py": "7c6534ef2267967db62142cd19ef9a84ebcc80647b79fe0455bc851115cb60ac",
     "templates/AGENTS.ddp.md": "44e7d5ca9b62dbba2f16ed6c4cd3b16a05d60315f169fcfc7ab6e7de9689a9d2",
     "templates/CLAUDE.ddp.md": "37be274d4f848273c91a7130ec466d9d893e53862848e9c57f71773472313440",
+    "templates/platform.example.json": "b01e3549731243b2fd997eedb3bf7f54f6a060f315b879194737b93a60363bee",
     "templates/settings.json": "4d76d4b1730f472e06d88dd88f6602c4bf7e8e59dca6e79d1d0517aecb9ad01b"
   }
 }

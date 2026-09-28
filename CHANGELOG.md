@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+### Added（面向主流大数据组件的任务开发兼容：引擎注册表 + 按方言检查）
+
+离线插件原先只认识两类引擎（MySQL 协议族 + 五个 command 引擎），引擎清单散在
+`clients.py` 的两个元组里；更麻烦的是 live 模式下**未登记的 kind 会静默落回
+`LivePlatformClient`**——用户写 `kind=clickhouse` 不报错、没提示，拿到的是一个语义
+完全不同的客户端，证据级别从服务端 query_id 悄悄降成本地回执。
+
+- **引擎能力注册表 `engine/core/engines.py`（唯一权威）**：每个 kind 登记
+  family（dbapi/command/cli/mcp）、方言、必填配置键、默认端口、**证据级别**与可用湖表格式。
+  `clients.py` 的两个 kind 元组改为注册表的投影；未登记 kind 一律硬报错并列出可用项。
+  本轮登记 19 个 kind：MySQL 协议族（mysql/doris/starrocks/tidb/oceanbase/generic-sql）、
+  Hive、Spark SQL、Flink SQL、Paimon、ClickHouse、Trino/Presto、PostgreSQL/Greenplum、
+  MaxCompute/ODPS（别名 maxcompute）、通用 command，以及 cli / mcp 两个通道。
+- **按方言的 SQL 规则 `engine/core/dialects.py`**：`sql check --dialect <id>`（缺省按
+  `platform.kind` 推导）在基线 17 项之上叠加引擎规则。明确写错的是 FAIL
+  （Hive 非 ACID 行级写、Trino/Presto 的 INSERT OVERWRITE、MySQL 协议族的 INSERT OVERWRITE、
+  MaxCompute/Flink 的 UPDATE/DELETE、ClickHouse 的 UPDATE…FROM），条件性成立的是 WARN + 修复建议
+  （Doris/StarRocks 的模型限制、Spark 行级写与整表覆盖、PostgreSQL 的 ALTER TYPE/TRUNCATE、
+  ClickHouse 异步 mutation）。**不传方言时行为与改动前完全一致**。
+- **配置体检 `platform doctor`**：按注册表逐项判 kind/必填键/profiles 形状/明文口令，
+  只判"配没配对"、不判"连不连得上"。分族示例见 `engine/templates/platform.example.json`。
+- **证据级别写进回执**：dbapi/command 族的回执带 `evidence_level=local_receipt`
+  （只证明本机执行过，不等于平台 query_id）；CLI 契约族是 `server_query_id`。
+- 新增 `tests/test_engines.py`（23 条）：注册表结构自检、投影唯一性、未登记 kind 的硬错误、
+  逐 kind 构造适配器、方言规则正反例、doctor 的缺口报告、示例配置可解析、文档不许再抄第二份清单。
+
 ### Fixed（把"证据"补成"绑定到产物版本的证据"）
 
 对抗式复核发现：引擎已经把 `sql_hash` 写进执行账本，但没有任何出口门读它，

@@ -74,11 +74,25 @@ tools/build_codex_surface.py 从 Claude 源生成 Codex 面（清单/hooks/入�
   `tests/test_repo_invariants.py` 会核对声明与 CI 矩阵一致）。**Windows 请确保 `py -3` 可用**；macOS/Linux 装好后**必须跑一次**
   `python3 tools/adapt_hooks.py`（详见下面「安装」第 3 步，不跑的话硬门会静默失效）；
 - mock 模式开箱即用；live 模式需 PATH 上有 `tracker` / `quality`（knowledge 可
-  改用 HTTP 直连 OpenViking，无需本地 ov CLI），
-  数据平台可插拔：`kind=cli` 用 JSON stdout CLI，`doris|starrocks|mysql|tidb…`
-  用 pymysql 直连，`paimon|flink|spark|trino…` 用 `platform.command.run` 执行 SQL 文件
-  ，`kind=mcp` 预留为会话内通道（引擎不直调）。接入通道选型（MCP/CLI/直连）与
-  示例见 docs/REPRODUCTION-NOTES.md 1.2.1 / 1.2.2。
+  改用 HTTP 直连 OpenViking，无需本地 ov CLI）。
+- **数据平台可插拔，引擎清单只有一份权威**：`engine/core/engines.py` 登记每个
+  `platform.kind` 的执行族（dbapi / command / cli / mcp）、方言、必填配置键、
+  默认端口与**证据级别**。当前覆盖 MySQL 协议族（mysql/doris/starrocks/tidb/oceanbase）、
+  Hive、Spark SQL、Flink SQL、Trino/Presto、ClickHouse、PostgreSQL/Greenplum、
+  MaxCompute(ODPS) 与湖表格式（Iceberg/Hudi/Paimon/Delta 作为与执行引擎正交的维度）。
+  配之前先跑 `py -3 .data-dev/engine/ddp.py platform doctor`：它按注册表逐项体检
+  （kind 是否登记、必填键、profiles 形状、明文口令），**未登记的 kind 一律硬报错并列出可用项**，
+  不再静默落回 CLI 契约。
+- 写 SQL 时按引擎校验：`sql check --dialect <hive|spark|doris|clickhouse|trino|odps|postgres|flink|mysql>`
+  （不传则按 `platform.kind` 推导；推不出来只跑基线 17 项，行为与以前一致）。
+  例：Hive 的 UPDATE/DELETE、Trino 的 INSERT OVERWRITE、MaxCompute 的行级写都是 FAIL；
+  Doris/StarRocks/Spark/PostgreSQL 的条件性写法是 WARN + 修复建议。
+  接入通道选型（MCP/CLI/直连）、配置示例与证据级别说明见 docs/REPRODUCTION-NOTES.md 1.2.1 / 1.2.2。
+
+> 迁移提示：本轮只**新增可选能力**——方言检查（`--dialect`，不传即旧行为）、
+> `platform doctor`（只读体检）、注册表里新增的引擎 kind。
+> 老配置（`kind=cli` / `kind=doris` / `kind=command` …）无需改动；
+> 唯一的硬行为变化是**未登记 kind 从"静默当成 CLI"变成"报错并列出可用项"**。
 
 ### 1. 安装
 

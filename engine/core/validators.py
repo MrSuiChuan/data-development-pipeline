@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import context
+from . import context, dialects, engines
 
 LEVELS = ("L0", "L1", "L2", "L3")
 SUMMARY_LAYERS = ("dws", "ads", "app")
@@ -494,8 +494,13 @@ def sql_compliance_check(
     filename: str = "",
     is_dp_task: bool = False,
     ddl_targets: Optional[Sequence[str]] = None,
+    dialect: Optional[str] = None,
 ) -> List[Issue]:
-    """17 rules. Rules 1..9 are zero-tolerance; 10..17 are WARN quality checks."""
+    """17 rules. Rules 1..9 are zero-tolerance; 10..17 are WARN quality checks.
+
+    ``dialect``（可选）追加按引擎的规则：同一条 SQL 在 Hive 与 ClickHouse 上成立与否不同。
+    不传 dialect 时行为与改动前完全一致——基线 17 项不依赖任何引擎。
+    """
     issues: List[Issue] = []
     upper = text.upper()
     annotations = _extract_annotations(text)
@@ -658,12 +663,45 @@ def sql_compliance_check(
         issues.append(Issue("sql.compliance.partition_hint", phase, "WARN", "未发现分区字段（ds/date）相关写法，请核对", rule=16, file=filename))
     if text.strip().lower().startswith(("select", "insert", "update", "delete")) and ";" in text and text.count(";") > 1:
         issues.append(Issue("sql.compliance.multi_statement", phase, "WARN", "单文件多语句：请拆文件或用 batch 标注", rule=17, file=filename))
+
+    # --- dialect rules (仅当显式给出 dialect 时生效) ----------------------
+    for hit in dialects.dialect_issues(text, dialect, filename):
+        issues.append(
+            Issue(
+                str(hit["id"]),
+                phase,
+                str(hit["severity"]),
+                str(hit["message"]),
+                rule=int(hit["rule"]) or None,
+                file=filename,
+                detail={"dialect": hit["dialect"], "repair": hit["repair"]},
+            )
+        )
     return issues
 
 
-def scan_sql_tree(req_dir: Path) -> List[Issue]:
-    """Run the 17-rule compliance scan over ddl/ etl/ dp_task/."""
+def project_dialect(req_dir: Path) -> Optional[str]:
+    """按项目配置推导方言（供 P3 出口门用）；推导不出来就返回 None，只用基线 17 项。
+
+    未登记 kind 的报错责任在 `platform doctor` / `make_platform`，不在这里制造第二个错误面。
+    """
+    node = Path(req_dir)
+    for _ in range(4):
+        node = node.parent
+        if (node / ".data-dev" / "config.json").is_file():
+            kind = str((context.load_config(node).get("platform") or {}).get("kind") or "cli")
+            try:
+                return engines.dialect_of(kind)
+            except engines.UnknownEngine:
+                return None
+    return None
+
+
+def scan_sql_tree(req_dir: Path, dialect: Optional[str] = None) -> List[Issue]:
+    """Run the 17-rule compliance scan over ddl/ etl/ dp_task/（外加该引擎的方言规则）。"""
     issues: List[Issue] = []
+    if dialect is None:
+        dialect = project_dialect(req_dir)
     ddl_targets = [p.stem for p in (req_dir / "ddl").glob("*.sql")] if (req_dir / "ddl").is_dir() else []
     for sub, is_task in (("ddl", False), ("etl", False), ("dp_task", True)):
         base = req_dir / sub
@@ -677,6 +715,7 @@ def scan_sql_tree(req_dir: Path) -> List[Issue]:
                     filename=path.name,
                     is_dp_task=is_task,
                     ddl_targets=ddl_targets if sub != "ddl" else None,
+                    dialect=dialect,
                 )
             )
     return issues

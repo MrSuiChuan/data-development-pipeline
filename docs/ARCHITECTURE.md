@@ -117,6 +117,36 @@
 
 软提醒 8 条（WARN）：WHERE 过滤、超长行、分号、CTE、聚合、table 注解、分区字段、多语句。
 
+### 引擎维度：注册表 + 按方言的规则（COMPAT-001/002/003）
+
+基线 17 项是**引擎无关的离线纪律**；"这条 SQL 在这个引擎上成不成立"是另一层，落在
+`engine/core/engines.py`（注册表）与 `engine/core/dialects.py`（方言规则）：
+
+```
+platform.kind ──► engines.resolve(kind) ──► {family, dialect, required, default_port, evidence, formats}
+                                   │
+                                   ├─ family=dbapi   → SqlPlatformClient（pymysql 直连）
+                                   ├─ family=command → CommandPlatformClient（argv 模板执行 SQL 文件）
+                                   ├─ family=cli     → LivePlatformClient（JSON stdout 契约）
+                                   └─ family=mcp     → 拒绝直调（会话内通道）
+                                   │
+                                   └─ dialect ───────► dialects.rules_for(dialect) → 额外 Issue（FAIL/WARN）
+```
+
+三条硬约定：
+
+1. **未登记的 kind 一律报错并列出可用项**。曾经的实现在 live 模式静默落回 `LivePlatformClient`，
+   于是 `kind=clickhouse` 这类写法会拿到一个语义完全不同的客户端，证据级别从服务端 query_id
+   悄悄降级成本地回执而不留痕。
+2. **`--dialect` 不传就完全不变**：方言规则是"加一档"，不是"改一档"；基线 17 项在任何引擎下都跑。
+   缺省方言按 `platform.kind` 推导，推不出来退回 `generic`（只有基线）。
+3. **证据级别写进注册表并在回执里盖章**（`server_query_id` / `local_receipt` / `none`）。
+   dbapi 与 command 族拿不到服务端 query id，回执里带 `evidence_level=local_receipt`——
+   它只证明"这条 SQL 在本机执行过"，不等于平台 query_id，报告里必须照实写。
+
+配置体检入口：`ddp.py platform doctor`（按注册表逐项判 kind / 必填键 / profiles / 明文口令，
+只判"配没配对"，不判"连不连得上"）。分族示例见 `engine/templates/platform.example.json`。
+
 ### P4 机器证据门（最锋利的一刀）
 
 `test_report.md` 标 ✅ 的每个 `TC-xxxx`，必须在 `test_runs.json` 找到

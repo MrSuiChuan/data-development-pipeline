@@ -175,8 +175,12 @@ def default_config() -> Dict[str, Any]:
             },
         },
         "platform": {
-            # cli | mysql-family(mysql/doris/starrocks/tidb/oceanbase/generic-sql)
-            # | command(paimon/flink/spark/trino/presto) | mcp(预留，会话内通道)
+            # kind 的唯一权威是 engine/core/engines.py（family/dialect/必填键/证据级别）：
+            #   dbapi   → mysql / doris / starrocks / tidb / oceanbase / generic-sql
+            #   command → hive / spark / flink / paimon / clickhouse / trino / presto /
+            #             postgres / greenplum / odps(maxcompute) / command
+            #   cli     → JSON stdout 契约；mcp → 预留（会话内通道，引擎不直调）
+            # 配完先跑 `ddp.py platform doctor`；未登记的 kind 会被硬报错。
             "kind": "cli",
             "host": "",
             "port": 9030,

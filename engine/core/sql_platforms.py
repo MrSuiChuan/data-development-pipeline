@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
-from . import clients, context
+from . import clients, context, engines
 
 
 def expand_bizdate(sql: str, date_value: str) -> str:
@@ -265,6 +265,7 @@ class SqlPlatformClient(TaskLedgerMixin, clients.PlatformClient):
             "status": "SUCCESS",
             "query_id": "run_" + context.sha256_text(f"{sql}|{context.utcnow()}")[:14],
             "engine": self.engine,
+            "evidence_level": engines.EVIDENCE_LOCAL,
             "executed_at": context.utcnow(),
             "duration_s": round(time.time() - started, 3),
             **extra,
@@ -378,6 +379,7 @@ class CommandPlatformClient(TaskLedgerMixin, clients.PlatformClient):
             "status": "SUCCESS",
             "query_id": "run_" + context.sha256_text(f"{sql}|{context.utcnow()}")[:14],
             "engine": self.engine,
+            "evidence_level": engines.EVIDENCE_LOCAL,
             "executed_at": context.utcnow(),
             "duration_s": round(time.time() - started, 3),
             **extra,
