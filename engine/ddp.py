@@ -24,7 +24,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from core import clients, context, engines, gates, spec, state, validators  # noqa: E402
+from core import clients, context, ddl, engines, gates, spec, state, validators  # noqa: E402
 from core.state import Pipeline  # noqa: E402
 
 # Windows 上 stdout/stderr 被重定向（管道、写文件、CI）时用 cp1252/cp936，
@@ -729,6 +729,58 @@ def verb_sql(flags: Dict[str, str]) -> None:
     )
     if validators.has_blockers(issues):
         sys.exit(1)
+
+
+def verb_ddl(flags: Dict[str, str]) -> None:
+    """ddl render --spec <file> [--dialect X] [--out path] [--force] | ddl types
+
+    渲染前先按方言做类型合法性校验（未知 canonical 类型直接拒绝）；写文件默认不覆盖已有 ddl/，
+    因为渲染结果只是起始模板，要人看过、并过 P3 的 sql check 与真实执行。
+    """
+    sub = flags.get("sub", "") or flags.get("1", "")
+    if sub == "types":
+        emit({"ok": True, "canonical": list(ddl.CANONICAL_TYPES), "dialects": list(ddl.dialects_with_types())})
+        return
+    if sub != "render":
+        print("ddl 子命令: render --spec <file> [--dialect <id>] [--out <path>] [--force] | types", file=sys.stderr)
+        sys.exit(2)
+    spec_path = flags.get("spec", "")
+    if not spec_path:
+        print("ddl render 需要 --spec <json 文件>", file=sys.stderr)
+        sys.exit(2)
+    payload = context.load_json(Path(spec_path))
+    if payload is None:
+        print(f"spec 不是合法 JSON: {spec_path}", file=sys.stderr)
+        sys.exit(2)
+    dialect = str(flags.get("dialect") or "").strip()
+    if not dialect:
+        try:
+            dialect = engines.dialect_from_config(CONFIG)
+        except engines.UnknownEngine as err:
+            print(f"[配置] {err}", file=sys.stderr)
+            dialect = "generic"
+    try:
+        rendered = ddl.render_ddl(payload, dialect)
+    except ddl.DdlError as err:
+        emit({"ok": False, "blocked": True, "gate": "ddl_render", "reason": str(err)})
+        sys.exit(1)
+    result: Dict[str, Any] = {"ok": True, **rendered}
+    out = flags.get("out", "")
+    if out:
+        target = Path(out)
+        if target.exists() and not flags.get("force"):
+            emit(
+                {
+                    "ok": False,
+                    "blocked": True,
+                    "gate": "ddl_render",
+                    "reason": f"{target} 已存在：渲染产物要人看过再落盘，要覆盖请显式加 --force",
+                }
+            )
+            sys.exit(1)
+        context.write_text(target, rendered["sql"] + "\n")
+        result["written"] = str(target)
+    emit(result)
 
 
 def verb_platform(flags: Dict[str, str]) -> None:
@@ -1558,6 +1610,8 @@ verbs:
   ctx set --key k [--value v] | ctx list      # 机器证据键除外，只能用 evidence
   evidence verify|selfcheck|confirm [--ticket <id>]   # 证据键只能由此写
   sql check --text '...' | --file x.sql [--task] [--dialect <hive|spark|doris|clickhouse|...>]
+  ddl render --spec <json> [--dialect <id>] [--out ddl/x.sql] [--force]   # 按引擎渲染建表模板
+  ddl types                                  # 列出 canonical 类型与有映射的方言
   platform doctor                            # 配置体检：kind/必填键/profiles/明文口令
   platform run-sql|check-grammar|create-task|read-task|update-task|submit|publish|backfill ...
   kb search --query ... | read --uri viking://resources/...
@@ -1585,7 +1639,7 @@ def main() -> None:
         return
     known_verbs = {
         "setup", "engine", "ticket", "comment", "sds", "start", "advance", "status", "report", "ctx",
-        "evidence", "sql", "platform", "kb", "diff", "review-report", "deploy", "semantic",
+        "evidence", "sql", "ddl", "platform", "kb", "diff", "review-report", "deploy", "semantic",
         "rollback", "finish", "demo", "baseline",
     }
     verb_index = next((i for i, token in enumerate(tokens) if token in known_verbs), None)
@@ -1596,7 +1650,7 @@ def main() -> None:
     flags = boot(tokens)
     sub = next((token for token in tokens[verb_index + 1 :] if not token.startswith("-")), None)
     if sub and verb in (
-        "ticket", "sds", "kb", "platform", "ctx", "evidence", "comment", "sql", "engine", "baseline",
+        "ticket", "sds", "kb", "platform", "ctx", "evidence", "comment", "sql", "ddl", "engine", "baseline",
     ):
         flags["sub"] = sub
     handlers: Dict[str, Callable[[Dict[str, str]], None]] = {
@@ -1612,6 +1666,7 @@ def main() -> None:
         "ctx": verb_ctx,
         "evidence": verb_evidence,
         "sql": verb_sql,
+        "ddl": verb_ddl,
         "platform": verb_platform,
         "kb": verb_kb,
         "diff": verb_diff,

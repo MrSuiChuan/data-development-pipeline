@@ -147,6 +147,28 @@ platform.kind ──► engines.resolve(kind) ──► {family, dialect, requir
 配置体检入口：`ddp.py platform doctor`（按注册表逐项判 kind / 必填键 / profiles / 明文口令，
 只判"配没配对"，不判"连不连得上"）。分族示例见 `engine/templates/platform.example.json`。
 
+### 类型映射与 DDL 渲染（COMPAT-004）
+
+`engine/core/ddl.py` 是类型与建表模板的唯一权威：
+
+```
+canonical 类型（string/bigint/int/double/decimal/boolean/date/timestamp）
+   └─► TYPE_MAP[dialect][canonical] → 物理类型（Doris DECIMALV3 / Hive DECIMAL /
+                                        ClickHouse Decimal / PostgreSQL NUMERIC …）
+   └─► render_ddl(spec, dialect)    → 按方言拼 CREATE TABLE（含该方言的注释/键/属性语法）
+   └─► validate_ddl_types(sql, d)   → 拦住"照着别的引擎抄类型"（DECIMALV3 抄到 Hive）
+```
+
+三条边界，写在代码与文档里：
+
+1. **渲染产物是起始模板，不是可直接上线的建表语句**：表模型、分布键、分桶数、connector 参数
+   由人拍板（`spec.properties` 原样透传），渲染结果照样要过 P3 的 `sql check` 与真实执行；
+2. **渲染默认不落盘覆盖**：`ddl render --out` 目标已存在时必须显式 `--force`，
+   避免模板把人工改过的建表语句冲掉；
+3. **方言语法差异显式表达**：PostgreSQL 的注释生成独立 `COMMENT ON` 语句、Doris/StarRocks 的键子句
+   写在 `)` 之外、MySQL 不生成 PROPERTIES、Trino 用 `WITH (format=…)` 而不是 Spark 的 `USING`——
+   这几条都有回归用例（`tests/test_ddl.py::RenderTemplateTests`）。
+
 ### P4 机器证据门（最锋利的一刀）
 
 `test_report.md` 标 ✅ 的每个 `TC-xxxx`，必须在 `test_runs.json` 找到

@@ -87,6 +87,11 @@ tools/build_codex_surface.py 从 Claude 源生成 Codex 面（清单/hooks/入�
   （不传则按 `platform.kind` 推导；推不出来只跑基线 17 项，行为与以前一致）。
   例：Hive 的 UPDATE/DELETE、Trino 的 INSERT OVERWRITE、MaxCompute 的行级写都是 FAIL；
   Doris/StarRocks/Spark/PostgreSQL 的条件性写法是 WARN + 修复建议。
+- 建表按引擎出模板：`py -3 .data-dev/engine/ddp.py ddl render --spec <spec.json> [--dialect <id>] [--out ddl/x.sql]`。
+  类型映射表（canonical → 每个引擎的物理类型）在 `engine/core/ddl.py`：Doris 的 `DECIMALV3`、
+  Hive 的 `DECIMAL`、ClickHouse 的 `Decimal`、PostgreSQL 的 `NUMERIC` 不再靠人抄；
+  未知类型/未知方言直接报错，渲染产物默认**不覆盖**已有 `ddl/` 文件（`--force` 才覆盖），
+  而且只是起始模板——照样要过 `sql check` 与真实执行。
   接入通道选型（MCP/CLI/直连）、配置示例与证据级别说明见 docs/REPRODUCTION-NOTES.md 1.2.1 / 1.2.2。
 
 > 迁移提示：本轮只**新增可选能力**——方言检查（`--dialect`，不传即旧行为）、

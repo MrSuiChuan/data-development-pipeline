@@ -23,6 +23,13 @@
   ClickHouse 异步 mutation）。**不传方言时行为与改动前完全一致**。
 - **配置体检 `platform doctor`**：按注册表逐项判 kind/必填键/profiles 形状/明文口令，
   只判"配没配对"、不判"连不连得上"。分族示例见 `engine/templates/platform.example.json`。
+- **类型映射与 DDL 渲染 `engine/core/ddl.py` + `ddp.py ddl render`**：canonical 类型
+  （string/bigint/int/double/decimal/boolean/date/timestamp）映到每个方言的物理类型，
+  按方言渲染建表模板（Hive/ODPS 的 `STORED AS`、Doris/StarRocks 的 `UNIQUE KEY + DISTRIBUTED BY`、
+  ClickHouse 的 `ENGINE/PARTITION BY/ORDER BY`、Trino 的 `WITH (format, partitioned_by)`、
+  PostgreSQL 的 `COMMENT ON` 独立语句）；未知类型/未知方言直接报错，
+  `--out` 默认不覆盖已有 `ddl/` 文件（`--force` 才覆盖）。渲染产物是**起始模板**，
+  仍须过 `sql check` 与真实执行。
 - **证据级别写进回执**：dbapi/command 族的回执带 `evidence_level=local_receipt`
   （只证明本机执行过，不等于平台 query_id）；CLI 契约族是 `server_query_id`。
 - 新增 `tests/test_engines.py`（23 条）：注册表结构自检、投影唯一性、未登记 kind 的硬错误、
