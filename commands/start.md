@@ -47,6 +47,14 @@ py -3 .data-dev/engine/ddp.py start --ticket <T-xxxx> [--autopilot]
 - 加载 `data-develop` skill；按架构清单**自底向上**（适配→逻辑→接口→核对）。
 - 每张表严格 DDL → ETL → `dp_task/` 顺序（dev_order_guard / difficulty_guard 硬门拦截乱序与 L0/L1 建表）。
 - 每份 SQL 过 17 项检查（`py -3 .data-dev/engine/ddp.py sql check --file …`，9 条零容忍）。
+- **按引擎与表格式检查**（多引擎兼容）：`sql check` 会按 `platform.kind` 推出方言、
+  按 `platform.format` 推出湖表格式，再叠加该引擎的规则——Hive 的行级写、Trino 的
+  `INSERT OVERWRITE`、MaxCompute 的行级写是 FAIL；Doris/StarRocks 的模型限制、
+  Hudi 缺 `primaryKey`、Delta 的 `VACUUM` 是 WARN（带修复建议）。要显式指定就加
+  `--dialect <id>` / `--format <id>`。引擎配完先跑
+  `py -3 .data-dev/engine/ddp.py platform doctor` 体检（kind/必填键/profiles/明文口令/kind×format 组合）。
+  建表可用 `ddl render --spec <json> [--dialect <id>] [--format <id>]` 出起始模板
+  （类型映射按引擎走：Doris `DECIMALV3`、Hive `DECIMAL`、ClickHouse `Decimal`、PostgreSQL `NUMERIC`）。
 - 开发环境真跑 ETL 并让引擎自动落证据：
   `py -3 .data-dev/engine/ddp.py platform run-sql --file <etl/*.sql> --env dev
   --ticket <T-xxxx> --save-evidence`（引擎把回执写进执行账本并生成

@@ -20,6 +20,21 @@ description: P3 数据研发方法论：自底向上开发、DDL→ETL→dp_task
 语法护栏（括号/引号配对）、写表前 DDL 存在、禁 SELECT *、dp_task 带调度注解、带 -- source: 血缘。
 8 条软提醒：WHERE 过滤、超长行、分号、CTE、聚合、-- table: 注解、分区字段、多语句。
 
+## 引擎与表格式（多引擎兼容）
+
+同一份 SQL 在不同引擎上**成立与否不同**，所以检查分两层：基线 17 项跨引擎恒成立；
+方言与湖表格式的规则只在该引擎/格式下叠加（`engine/core/dialects.py`、`engine/core/formats.py`）。
+
+- 方言由 `platform.kind` 推出，也可显式指定：`sql check --file … --dialect hive`。
+  FAIL 例：Hive/ODPS/Flink 的行级写、Trino 与 MySQL 协议族的 `INSERT OVERWRITE`。
+  WARN 例：Doris/StarRocks 的键模型限制、Spark 的行级写与整表覆盖、PostgreSQL 的 `ALTER TYPE`/`TRUNCATE`。
+- 湖表格式由 `platform.format` 推出（`--format` 可显式指定）：Hudi 缺 `primaryKey`、
+  Delta 的 `VACUUM`/`overwriteSchema`、Iceberg 的行级 `DELETE`、Paimon 缺 `bucket` 都是 WARN + 修复建议。
+- 配完引擎先体检：`platform doctor`（kind 是否登记、必填键、profiles 形状、明文口令、kind×format 组合）。
+  未登记的 kind/组合一律报错并列出可用项——**不要**按"差不多能跑"往下写。
+- 建表不要凭记忆抄类型：`ddl render --spec <json> [--dialect <id>] [--format <id>]` 出该引擎的
+  起始模板（含类型映射与注释/键/属性语法差异）；渲染产物只是模板，仍须过 `sql check` 与真实执行。
+
 ## 证据纪律
 
 - 每张表必须在**开发环境**真跑，把返回的 query_id 落 `etl_dev_exec.json`（SUCCESS+env=dev）；
