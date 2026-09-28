@@ -205,6 +205,7 @@ def render_ddl(spec: Any, dialect: str, fmt_override: Optional[str] = None) -> D
         return f"{prefix} ({rendered})"
 
     comments_on: List[str] = []
+    tail_statements: List[str] = []
     if dialect in ("hive", "odps"):
         sql = [f"CREATE TABLE IF NOT EXISTS {table} (\n{columns_sql}\n)"]
         if comment:
@@ -300,7 +301,15 @@ def render_ddl(spec: Any, dialect: str, fmt_override: Optional[str] = None) -> D
         sql = [f"CREATE TABLE IF NOT EXISTS {table} (\n{columns_sql}\n)"]
         if partition:
             sql.append(f"PARTITION BY RANGE ({', '.join(partition)})")
+            warnings.append(
+                "PostgreSQL 声明式分区必须显式建分区，否则写入报 no partition of relation found："
+                f"已附带一个 DEFAULT 分区（{table}_default），上线前请换成按时间范围的真实分区"
+            )
         if dialect == "postgres":
+            if partition:
+                tail_statements.append(
+                    f"CREATE TABLE IF NOT EXISTS {table}_default PARTITION OF {table} DEFAULT"
+                )
             if properties:
                 sql.append(props_clause("WITH", key_wrap=""))
                 warnings.append("PostgreSQL 的 WITH (...) 是存储参数（fillfactor 之类），键名与取值按引擎确认")
@@ -318,11 +327,12 @@ def render_ddl(spec: Any, dialect: str, fmt_override: Optional[str] = None) -> D
             warnings.append(f"{dialect} 不做属性语法假设：spec.properties 未生成，请按目标引擎手工补")
 
     body = "\n".join(part for part in sql if part).rstrip()
-    if comments_on:
-        # PostgreSQL 的注释是独立语句：CREATE 必须先收尾，否则注释会粘进建表语句里（语法错）
+    trailing = [*tail_statements, *comments_on]
+    if trailing:
+        # PostgreSQL 的分区与注释都是独立语句：CREATE 必须先收尾，否则会粘进建表语句里（语法错）
         if not body.endswith(";"):
             body += ";"
-        body += "\n" + "\n".join(comments_on)
+        body += "\n" + "\n".join(statement.rstrip(";") + ";" for statement in trailing)
     elif not body.endswith(";"):
         body += ";"
     note = TIMESTAMP_NOTES.get(dialect)

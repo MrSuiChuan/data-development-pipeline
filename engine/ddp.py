@@ -186,6 +186,8 @@ def record_execution(sql_text: str, result: Any) -> None:
             "executed_at": str(result.get("executed_at") or result.get("run_at") or context.utcnow()),
             "duration_s": result.get("duration_s"),
             "affected_rows": result.get("affected_rows"),
+            # 证据级别进账本：门与报告都要能看出这条回执是平台 query_id 还是本机回执
+            "evidence_level": str(result.get("evidence_level") or ""),
             "sql_hash": context.sha256_text(sql_text or ""),
         }
     )

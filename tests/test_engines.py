@@ -70,6 +70,22 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(engines.resolve("hive").missing_keys({"host": "h"}), ["command.run"])
         self.assertEqual(engines.resolve("hive").missing_keys({"command": {"run": ["beeline"]}}), [])
 
+    def test_command_engine_decides_dialect(self) -> None:
+        """kind=command 的真实方言来自 platform.command.engine。
+
+        真实引擎联调发现：只看 kind 会把 MySQL/Hive 的 DDL 与检查全退化成 generic
+        （建表丢了 PRIMARY KEY、方言规则一条不生效）。
+        """
+        config = {"platform": {"kind": "command", "command": {"engine": "mysql", "run": ["mysql"]}}}
+        self.assertEqual(engines.dialect_from_config(config), "mysql")
+        self.assertEqual(engines.dialect_from_config({"platform": {"kind": "command", "command": {}}}), "generic")
+        with self.assertRaises(engines.UnknownEngine):
+            engines.dialect_from_config({"platform": {"kind": "command", "command": {"engine": "oracle"}}})
+        # doctor 的 dialect 必须与渲染/检查口径一致
+        report = engines.diagnose_platform({"kind": "command", "command": {"engine": "mysql", "run": ["mysql"]}})
+        self.assertEqual(report["dialect"], "mysql")
+        self.assertTrue(report["ok"], report["errors"])
+
     def test_clients_tuples_are_projections_of_the_registry(self) -> None:
         self.assertEqual(clients.SQL_PLATFORM_KINDS, engines.kinds_for_family(engines.FAMILY_DBAPI))
         self.assertEqual(clients.COMMAND_PLATFORM_KINDS, engines.kinds_for_family(engines.FAMILY_COMMAND))
@@ -182,6 +198,24 @@ class DialectRuleTests(unittest.TestCase):
     def test_unknown_dialect_has_no_rules(self) -> None:
         self.assertEqual(dialects.rules_for("postgresql-x"), ())
         self.assertEqual(dialects.dialect_issues("DELETE FROM t;", "postgresql-x"), [])
+
+    def test_lineage_rule_targets_data_movement_not_ddl(self) -> None:
+        """第 9 条只该管搬数据的语句。
+
+        真实联调发现：旧写法把 CREATE TABLE 也算进去，导致所有新建表 DDL 被判
+        「缺 -- source: 上游血缘注解」——建表被挡在门外（见 docs/TEST-REPORT-postgres-live.md）。
+        """
+        ddl_sql = "CREATE TABLE IF NOT EXISTS t (\n  id BIGINT,\n  ds DATE\n);"
+        ddl_codes = [i.code for i in validators.sql_compliance_check(ddl_sql, filename="t.sql")]
+        self.assertNotIn("sql.compliance.no_lineage", ddl_codes)
+
+        insert = "-- table: t\nINSERT INTO t (id) VALUES (1);"
+        insert_codes = [i.code for i in validators.sql_compliance_check(insert, filename="t.sql")]
+        self.assertIn("sql.compliance.no_lineage", insert_codes)
+
+        ctas = "-- table: t\nCREATE TABLE t AS SELECT id FROM src;"
+        ctas_codes = [i.code for i in validators.sql_compliance_check(ctas, filename="t.sql")]
+        self.assertNotIn("sql.compliance.no_lineage", ctas_codes, "CTAS 有 FROM，不该再要 source 注解")
 
     def test_sql_check_cli_reports_and_blocks_by_dialect(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

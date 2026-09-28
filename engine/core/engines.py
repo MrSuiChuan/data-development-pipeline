@@ -269,12 +269,35 @@ def dialect_from_config(config: Dict[str, object], default: str = "generic") -> 
 
     platform 段缺失或 kind=cli 时返回 ``default``（generic）：CLI 契约族的方言由平台自己管，
     插件侧只做基线 17 项——这正是改动前的行为。
+
+    ``kind=command`` 是通用 argv 执行器，它的 SQL 方言写在 ``platform.command.engine``
+    （例如 ``{"kind": "command", "command": {"engine": "mysql", ...}}``）——真实引擎联调时
+    发现只看 kind 会把 MySQL/Hive 的 DDL 与检查全部退化成 generic（见 docs/TEST-REPORT-mysql-live.md）。
     """
     platform = (config or {}).get("platform") or {}
     kind = str(platform.get("kind") or "cli").strip() or "cli"
     if kind == "cli":
         return default
+    if kind == "command":
+        engine = str((platform.get("command") or {}).get("engine") or "").strip().lower()
+        if engine in ENGINES:
+            return ENGINES[engine].dialect
+        if engine:
+            raise UnknownEngine(
+                f"platform.command.engine 未登记: {engine!r}。可用: {', '.join(available_kinds())}"
+                "（写具体引擎名才能拿到它的方言与检查；不写就按 generic）"
+            )
+        return default
     return resolve(kind).dialect
+
+
+def _effective_dialect(platform: Dict[str, object], spec: EngineSpec) -> str:
+    """kind=command 时返回 command.engine 的方言，与 dialect_from_config 保持同一口径。"""
+    if spec.kind == "command":
+        engine = str((platform.get("command") or {}).get("engine") or "").strip().lower()
+        if engine in ENGINES:
+            return ENGINES[engine].dialect
+    return spec.dialect
 
 
 def diagnose_platform(platform: Dict[str, object]) -> Dict[str, object]:
@@ -299,7 +322,8 @@ def diagnose_platform(platform: Dict[str, object]) -> Dict[str, object]:
         {
             "canonical_kind": spec.kind,
             "family": spec.family,
-            "dialect": spec.dialect,
+            # kind=command 时真实方言来自 platform.command.engine（doctor 要跟渲染/检查口径一致）
+            "dialect": _effective_dialect(plat, spec),
             "evidence": spec.evidence,
             "formats": list(spec.formats),
             "default_port": spec.default_port,

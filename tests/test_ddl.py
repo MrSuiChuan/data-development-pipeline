@@ -141,6 +141,13 @@ class RenderTemplateTests(unittest.TestCase):
             sql = ddl.render_ddl(SPEC, dialect)["sql"]
             self.assertTrue(sql.rstrip().endswith(";"), dialect)
 
+    def test_postgres_partition_gets_default_partition(self) -> None:
+        """真实联调踩到：只写 PARTITION BY RANGE 不建分区，写入会报 no partition of relation found。"""
+        result = ddl.render_ddl(SPEC, "postgres")
+        self.assertIn("PARTITION BY RANGE (ds)", result["sql"])
+        self.assertIn("CREATE TABLE IF NOT EXISTS ads_x_default PARTITION OF ads_x DEFAULT;", result["sql"])
+        self.assertTrue(any("DEFAULT 分区" in w for w in result["warnings"]))
+
 
 class DdlTypeCheckTests(unittest.TestCase):
     def test_cross_engine_types_are_flagged(self) -> None:

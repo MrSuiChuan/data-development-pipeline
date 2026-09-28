@@ -48,6 +48,22 @@
 
 ### Fixed（多引擎端到端跑出来的两个真缺陷）
 
+### Fixed（真实引擎联调找出来的四个缺陷）
+
+用 Docker 起 PostgreSQL 16 与 MySQL 8.4.4 真跑"建表 → 写入 → 读回 → 证据落账"，
+一次揪出四处只有真引擎才会暴露的问题（报告见 `docs/TEST-REPORT-{postgres,mysql}-live.md`）：
+
+- **第 9 条血缘规则误伤纯建表**：`CREATE TABLE` 也被要求 `-- source:`，于是所有新建表 DDL
+  在 `platform run-sql` 前就被自己的门拦下。改为只对搬数据的语句（`INSERT` / CTAS）要求血缘。
+- **PostgreSQL 分区模板写不出能用的表**：只生成 `PARTITION BY RANGE (ds)`，真写入报
+  `no partition of relation found for row`。现在附带一个 `DEFAULT` 分区并出 WARN
+  提醒上线前换成真实时间分区。
+- **`kind=command` 丢了方言**：方言只看 `platform.kind`，而通用 argv 执行器的真实引擎写在
+  `platform.command.engine`。结果 MySQL 建表丢了 `PRIMARY KEY`/`ENGINE`、方言规则一条不生效、
+  检查退化成 generic。现在 `dialect_from_config` 与 `platform doctor` 都按 `command.engine` 取方言。
+- **执行账本没记证据级别**：`executions.json` 只存 query_id/sql_hash，门与报告看不出这条回执
+  是平台 query_id 还是本机回执。现在回执级别随账本一起落盘。
+
 把 demo 在 7 个引擎 kind 上各跑一遍，暴露了两处只有"换引擎"才会踩到的实现错误：
 
 - **`setup` 会静默清掉用户填好的 config.json**：`context.ensure_app_dir` 每次都用默认值重写

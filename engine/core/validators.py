@@ -747,7 +747,11 @@ def sql_compliance_check(
     if is_dp_task:
         issues.extend(_schedule_issues(annotations, phase, filename, scheduler))
 
-    if "INSERT" in upper or "CREATE TABLE" in upper:
+    # 第 9 条只针对"搬数据"的语句：INSERT 与 CTAS（CREATE TABLE ... AS SELECT）要说清上游。
+    # 纯建表（列定义/ALTER/分区）没有上游概念——旧写法把 `CREATE TABLE` 也纳入，
+    # 结果所有新建表 DDL 都被判 FAIL。真实引擎联调时正是它把建表挡在门外
+    # （见 docs/TEST-REPORT-postgres-live.md 的失败案例一）。
+    if re.search(r"\bINSERT\b", upper) or re.search(r"\bCREATE\s+TABLE\b[\s\S]{0,200}?\bAS\s+SELECT\b", upper):
         if not annotations.get("source") and not re.search(r"\bFROM\b", upper):
             issues.append(
                 Issue(
@@ -830,7 +834,9 @@ def project_engine_settings(req_dir: Path) -> Dict[str, Optional[str]]:
             settings["format"] = fmt or None
             settings["scheduler"] = str((config.get("scheduler") or {}).get("kind") or "cron").strip().lower()
             try:
-                settings["dialect"] = engines.dialect_of(kind)
+                # 用 dialect_from_config 而不是 dialect_of(kind)：kind=command 时方言来自
+                # platform.command.engine（真实引擎联调发现只按 kind 会退化成 generic）
+                settings["dialect"] = engines.dialect_from_config(config)
             except engines.UnknownEngine:
                 settings["dialect"] = None
             return settings
