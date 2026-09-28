@@ -63,6 +63,12 @@
   检查退化成 generic。现在 `dialect_from_config` 与 `platform doctor` 都按 `command.engine` 取方言。
 - **执行账本没记证据级别**：`executions.json` 只存 query_id/sql_hash，门与报告看不出这条回执
   是平台 query_id 还是本机回执。现在回执级别随账本一起落盘。
+- **`IF NOT EXISTS` 建表被误判**：目标表解析把 `CREATE TABLE IF NOT EXISTS x` 的 `IF` 当表名，
+  于是所有带 `IF NOT EXISTS` 的建表都报「文件名与目标表不一致」——而渲染模板恰好全都用
+  `IF NOT EXISTS`。现在 `CREATE TABLE [IF NOT EXISTS] name` 与 `INSERT [OVERWRITE|INTO] [TABLE] name`
+  都能正确解析（`INSERT INTO t` 不再被误判成"无法识别目标表"，这个旧用例也一并改成新行为）。
+- **`--save-evidence` 写的证据文件没有级别**：`etl_dev_exec.json` 只存 status/query_id/env/executed_at，
+  出口门里看不到"这是本机回执"。现在一并写 `evidence_level` 与 `engine`。
 
 把 demo 在 7 个引擎 kind 上各跑一遍，暴露了两处只有"换引擎"才会踩到的实现错误：
 

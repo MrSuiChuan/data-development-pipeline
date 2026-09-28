@@ -832,6 +832,9 @@ def verb_platform(flags: Dict[str, str]) -> None:
                 "env": env,
                 "executed_at": str(result.get("executed_at") or result.get("run_at") or context.utcnow()),
                 "sql_files": [flags["file"]] if flags.get("file") else [],
+                # 证据级别跟产物一起落盘：门与报告都要能看出这是平台 query_id 还是本机回执
+                "evidence_level": str(result.get("evidence_level") or ""),
+                "engine": str(result.get("engine") or ""),
             }
             context.write_json(req / "etl_dev_exec.json", evidence)
         emit(result)

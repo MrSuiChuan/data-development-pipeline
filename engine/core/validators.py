@@ -605,7 +605,12 @@ def _extract_annotations(text: str) -> Dict[str, str]:
 
 def _first_target_table(text: str) -> Optional[str]:
     m = re.search(
-        r"(?:CREATE\s+TABLE|INSERT\s+(?:OVERWRITE|INTO)\s+TABLE)\s+([`\"\[\]]?[\w$.-]+[`\"\[\]]?)",
+        # 真实联调踩到：`CREATE TABLE IF NOT EXISTS x` 会被旧正则把 "IF" 当成目标表，
+        # 于是所有 IF NOT EXISTS 的建表都报「文件名与目标表不一致」。
+        # 另外 `INSERT OVERWRITE x`（部分引擎不写 TABLE）也要认。
+        r"(?:CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?"
+        r"|INSERT\s+(?:OVERWRITE|INTO)\s+(?:TABLE\s+)?)"
+        r"([`\"\[\]]?[\w$.-]+[`\"\[\]]?)",
         text,
         re.IGNORECASE,
     )

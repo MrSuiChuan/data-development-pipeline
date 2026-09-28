@@ -128,8 +128,18 @@ class SqlComplianceTests(GateTestBase):
         self.assertFalse(validators.has_blockers(issues), issues)
         self.assertTrue(any(i.code == "sql.compliance.readonly" for i in issues))
 
-    def test_write_sql_still_requires_target(self) -> None:
+    def test_write_sql_target_parsing(self) -> None:
+        """目标表解析要认合法写法，也要拦真正解析不出的写语句。
+
+        真实引擎联调发现：旧正则只认 `INSERT ... TABLE`，于是 `INSERT INTO t` 这种
+        不带 TABLE 关键字的合法写法被误判成"无法识别目标表"（同时 `CREATE TABLE IF NOT EXISTS x`
+        会把 "IF" 当成表名）。两条都已修，这里锁行为。
+        """
         issues = validators.sql_compliance_check("INSERT INTO t SELECT 1;", filename="t.sql")
+        self.assertFalse(any(i.code == "sql.compliance.target" for i in issues), issues)
+
+        # 真正解析不出目标的写语句仍然 FAIL（LOAD 不在 INSERT/CREATE 形态里）
+        issues = validators.sql_compliance_check("LOAD DATA INPATH '/tmp/x' INTO TABLE t;", filename="t.sql")
         self.assertTrue(any(i.code == "sql.compliance.target" for i in issues))
 
     def test_write_sql_name_mismatch_still_fails(self) -> None:

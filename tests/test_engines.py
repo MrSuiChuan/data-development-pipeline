@@ -217,6 +217,25 @@ class DialectRuleTests(unittest.TestCase):
         ctas_codes = [i.code for i in validators.sql_compliance_check(ctas, filename="t.sql")]
         self.assertNotIn("sql.compliance.no_lineage", ctas_codes, "CTAS 有 FROM，不该再要 source 注解")
 
+    def test_target_table_parser_handles_if_not_exists(self) -> None:
+        """真实 P3 出口门踩到：`CREATE TABLE IF NOT EXISTS x` 曾把 "IF" 解析成目标表。"""
+        for sql, expected in (
+            ("CREATE TABLE IF NOT EXISTS ods_x (a BIGINT);", "ods_x"),
+            ("CREATE TABLE ods_y (a BIGINT);", "ods_y"),
+            ("INSERT OVERWRITE TABLE ads_z SELECT 1;", "ads_z"),
+            ("INSERT OVERWRITE ads_w SELECT 1;", "ads_w"),
+            ("INSERT INTO TABLE ads_v SELECT 1;", "ads_v"),
+        ):
+            self.assertEqual(validators._first_target_table(sql), expected, sql)
+
+        # 渲染模板 + 文件名一致时，第 1 项不该再报 name_mismatch
+        rendered = "CREATE TABLE IF NOT EXISTS ods_x (\n  a BIGINT\n);"
+        codes = [
+            i.code
+            for i in validators.sql_compliance_check(rendered, filename="ods_x.sql")
+        ]
+        self.assertNotIn("sql.compliance.name_mismatch", codes)
+
     def test_sql_check_cli_reports_and_blocks_by_dialect(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

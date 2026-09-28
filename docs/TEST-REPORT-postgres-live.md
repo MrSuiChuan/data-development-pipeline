@@ -72,11 +72,31 @@ $ python3 engine/ddp.py evidence verify --ticket T-LIVE
 | 语法错 | `SELECT FROM WHERE;` → `psql 退出码 3: syntax error at or near "WHERE"` | 正确：命令族按退出码判成败，真实报错原样抛出 |
 | 方言不匹配 | 同一份 `INSERT OVERWRITE` 丢给 `--dialect mysql` → `dialect.mysql.no_insert_overwrite` FAIL | 正确：跨引擎不是"换个 kind 就行"，规则会拦 |
 
-## 6. 结论与边界
+## 6. 真实 P3 出口门（补齐 dp_task + 架构机读块 + 证据键后跑）
+
+```
+$ python3 ... stage_gate(3, req, state)    # 引擎里 P3 出口门逐条 validator
+[WARN] sql.compliance.no_table_annotation: 建议加 -- table: 注解
+[WARN] evidence.level.local_receipt: 执行回执是本地回执（engine=postgres）：只证明这条 SQL 在本机执行过，没有平台侧 query_id 可回查
+[WARN] dev.code_diff.new_task: 无线上基准（新表场景），跳过 code_diff 强校验
+FAIL=0  WARN=3
+```
+
+也就是说：**真引擎上的建表/写入证据被 P3 出口门接受（FAIL=0）**，剩下的三条 WARN 都是如实标注
+（缺 `-- table:` 注解、证据级别是本机回执、新表无线上基准）。
+
+这一轮跑门又揪出两个缺陷（都已修 + 加用例）：
+
+| 现象 | 现场 | 处置 |
+| --- | --- | --- |
+| 所有 `IF NOT EXISTS` 建表都被判「文件名与目标表不一致」 | 目标表解析出的是 `IF` 而不是表名 | **正则修掉**：`CREATE TABLE [IF NOT EXISTS] name`、`INSERT [OVERWRITE\|INTO] [TABLE] name`（`TABLE` 可省略） |
+| 证据文件里看不出级别 | `--save-evidence` 写的 `etl_dev_exec.json` 只存 status/query_id/env/executed_at | **补上** `evidence_level` 与 `engine`：门与治理报告都能看到"这是本机回执" |
+
+## 7. 结论与边界
 
 **已证明**：PostgreSQL 16 上建表/写入/读回/证据落账/证据核验整条链路可用；两条缺陷（血缘误报、分区模板）
-是这次真跑找出来的，已修并加回归用例。
+是这次真跑找出来的，已修并加回归用例；补齐 dp_task/架构/证据键后，**P3 出口门在真引擎项目上 FAIL=0**。
 
 **未证明**：Kerberos/SSL 环境的连接参数、Greenplum 专有语法（分布键/资源组）、大表分区维护实践；
-`P3 出口门`的完整判定在本机用 mock demo 覆盖（`tests/test_engines.py::MultiEngineEndToEndTests`），
-本次真跑验的是**引擎适配器与证据链**这一段。
+P4/P5/P6 出口门没在真引擎上跑（P4 需要测试用例、P5 需要发布确认），
+它们由本机 mock 端到端覆盖（`tests/test_engines.py::MultiEngineEndToEndTests`）。
