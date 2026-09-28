@@ -287,15 +287,27 @@ def load_config(root: Path) -> Dict[str, Any]:
     return merged
 
 
-def ensure_app_dir(start: Optional[Path] = None, mode: str = "mock") -> Path:
-    """Create .data-dev scaffolding. Returns project root."""
+def ensure_app_dir(start: Optional[Path] = None, mode: Optional[str] = "mock") -> Path:
+    """Create .data-dev scaffolding. Returns project root.
+
+    **已存在的 config.json 不被覆盖**：它是用户手写的（执行器、知识库、limits 都在里面），
+    /setup 再跑一次或 demo 内部调 setup 都把它静默重置过——那是丢配置，不是初始化。
+    只有目录里还没有 config.json 时才写默认值；``mode=None`` 表示"不要动已有 mode"。
+    """
     root = (start or Path.cwd()).resolve()
     app = ensure_dir(root / APP_DIR_NAME)
-    cfg = default_config()
-    cfg["mode"] = mode if mode in ("mock", "live") else "mock"
-    cfg["created_at"] = utcnow()
+    path = config_path(root)
+    if path.is_file():
+        cfg = load_config(root)
+        if mode in ("mock", "live"):
+            cfg["mode"] = mode
+        cfg.setdefault("created_at", utcnow())
+    else:
+        cfg = default_config()
+        cfg["mode"] = mode if mode in ("mock", "live") else "mock"
+        cfg["created_at"] = utcnow()
     cfg["updated_at"] = utcnow()
-    write_json(config_path(root), cfg)
+    write_json(path, cfg)
     ensure_dir(app / TICKETS_DIR)
     ensure_dir(app / MOCK_DIR / "tracker")
     ensure_dir(app / MOCK_DIR / "platform")

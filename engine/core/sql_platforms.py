@@ -203,6 +203,8 @@ class TaskLedgerMixin:
 class SqlPlatformClient(TaskLedgerMixin, clients.PlatformClient):
     """MySQL-protocol engines via pymysql (Doris / StarRocks / MySQL / TiDB ...)."""
 
+    file_sql = True
+
     def __init__(self, config: Dict[str, Any], root: Path):
         self.config = config
         self.root = Path(root)
@@ -292,6 +294,8 @@ class SqlPlatformClient(TaskLedgerMixin, clients.PlatformClient):
 
 class CommandPlatformClient(TaskLedgerMixin, clients.PlatformClient):
     """Command-run engines (Paimon/Flink/Spark/Trino/Presto or a bridge script)."""
+
+    file_sql = True
 
     def __init__(self, config: Dict[str, Any], root: Path):
         self.config = config

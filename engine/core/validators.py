@@ -106,6 +106,52 @@ def execution_evidence_ok(ev: Any, limits: Optional[Dict[str, Any]] = None) -> t
     return True, ""
 
 
+def evidence_level_issues(ev: Any, phase: int, file: str) -> List[Issue]:
+    """执行回执的"证据级别"标注（COMPAT-005）。
+
+    回执里的 query_id 有四种来源：平台服务端返回、本机适配器自造、mock 模拟、以及改版前的
+    无标注产物。四种都能过门（门保证的是"有 SUCCESS + query_id + 时效 + 账本命中"），
+    但**级别不同不该长得一样**——报告里必须看得出这条证据到底是什么。这里统一产出 WARN（不阻断），
+    让级别出现在每次出口门的结论里，而不是等出货后才发现"证据强度悄悄降级了"。
+    """
+    if not isinstance(ev, dict):
+        return []
+    level = str(ev.get("evidence_level") or "").strip()
+    engine = str(ev.get("engine") or "?").strip()
+    if level == engines.EVIDENCE_SERVER:
+        return []
+    if level == engines.EVIDENCE_LOCAL:
+        return [
+            Issue(
+                "evidence.level.local_receipt",
+                phase,
+                "WARN",
+                f"执行回执是本地回执（engine={engine}）：只证明这条 SQL 在本机执行过，"
+                "没有平台侧 query_id 可回查",
+                file=file,
+            )
+        ]
+    if level == engines.EVIDENCE_MOCK:
+        return [
+            Issue(
+                "evidence.level.mock",
+                phase,
+                "WARN",
+                "执行回执来自 mock 模式：不构成真实执行证据（接真实引擎后重跑一次）",
+                file=file,
+            )
+        ]
+    return [
+        Issue(
+            "evidence.level.unlabeled",
+            phase,
+            "WARN",
+            "执行回执未标注 evidence_level（改版前产物）：重跑一次 platform run-sql 即可带上级别",
+            file=file,
+        )
+    ]
+
+
 def _ledger_runs(req_dir: Path, name: str) -> Optional[List[Dict[str, Any]]]:
     """``runs`` list from ``.data-dev/runtime/<name>``, or None when no ledger exists.
 
@@ -879,6 +925,7 @@ def validate_phase3_data_dev(req_dir: Path, state: Dict[str, Any]) -> List[Issue
     exec_path = req_dir / "etl_dev_exec.json"
     exec_ev = context.load_json(exec_path)
     ok_ev, reason = execution_evidence_ok(exec_ev, limits)
+    issues.extend(evidence_level_issues(exec_ev, 3, "etl_dev_exec.json"))
     if not ok_ev:
         issues.append(
             Issue(

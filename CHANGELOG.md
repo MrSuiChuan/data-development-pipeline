@@ -28,6 +28,23 @@
 - 新增 `tests/test_engines.py`（23 条）：注册表结构自检、投影唯一性、未登记 kind 的硬错误、
   逐 kind 构造适配器、方言规则正反例、doctor 的缺口报告、示例配置可解析、文档不许再抄第二份清单。
 
+### Fixed（多引擎端到端跑出来的两个真缺陷）
+
+把 demo 在 7 个引擎 kind 上各跑一遍，暴露了两处只有"换引擎"才会踩到的实现错误：
+
+- **`setup` 会静默清掉用户填好的 config.json**：`context.ensure_app_dir` 每次都用默认值重写
+  配置文件，而 demo 内部也会调 setup——也就是说"再跑一次 setup"或"跑个 demo"会把
+  `platform` / `knowledge` / `limits` 全部打回默认。现在已存在的配置不再被覆盖
+  （只补缺省键、刷新 updated_at），`--mode` 不传就不改已有 mode。
+- **P5 按配置 kind 判"文件型平台"，而不是按适配器能力判**：mock 模式下客户端是任务型的，
+  但配置写着 `kind=doris/mysql` 时部署代码仍走 SQL 路径，直接
+  `AttributeError: 'MockPlatformClient' object has no attribute 'backfill_code'`。
+  现在 `PlatformClient.file_sql` 由适配器自己声明（dbapi/command=True，cli/mock=False），
+  P5 部署与回滚都按它分流。
+- **demo 的执行证据按实标级别**：demo 产物里的 `etl_dev_exec.json` 现在带
+  `evidence_level=mock`，治理报告里会显示"证据级别=mock，engine=mock"——
+  演示产物不再看起来像真实执行证据。
+
 ### Fixed（把"证据"补成"绑定到产物版本的证据"）
 
 对抗式复核发现：引擎已经把 `sql_hash` 写进执行账本，但没有任何出口门读它，

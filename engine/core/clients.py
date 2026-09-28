@@ -235,6 +235,16 @@ def make_tracker(config: Dict[str, Any], root: Path) -> TrackerClient:
 # platform (dev + prod execution)
 # ---------------------------------------------------------------------------
 class PlatformClient:
+    """数据平台适配器基类。
+
+    ``file_sql`` 表达的是**这个适配器的能力**，不是配置里写了什么 kind：
+    True = 直接执行 SQL 文件/语句（dbapi / command 族），False = 操作平台任务对象
+    （CLI 契约族与 mock）。P5 部署据此分流——按配置 kind 分流会在 mock 模式下判错，
+    把任务型客户端当成文件型客户端用（实测：mock + kind=doris 时 demo 在 P5 崩）。
+    """
+
+    file_sql = False
+
     def run_sql(self, sql: str, project: str = "dev", env: str = "dev") -> Dict[str, Any]:
         raise NotImplementedError
 
@@ -287,6 +297,8 @@ class MockPlatformClient(PlatformClient):
             "project": project,
             "env": env,
             "at": context.utcnow(),
+            # mock 回执不构成真实证据：盖章之后，出口门与报告里都能看出这是模拟的。
+            "evidence_level": engines.EVIDENCE_MOCK,
         }
         runs = self._load(self.runs_path)
         runs.setdefault("items", []).append(record)

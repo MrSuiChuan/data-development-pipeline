@@ -211,9 +211,11 @@ def check_gate(command_text: str) -> None:
 # verbs
 # ---------------------------------------------------------------------------
 def verb_setup(flags: Dict[str, str]) -> None:
-    mode = flags.get("mode", "mock")
+    # 没有 --mode 就不改已有配置的 mode（否则在 live 项目里跑一次 setup 会被打回 mock）
+    mode = flags.get("mode")
     root = context.ensure_app_dir(ROOT, mode=mode)
-    print(json.dumps({"ok": True, "root": str(root), "mode": mode}, ensure_ascii=False))
+    effective = str(context.load_config(root).get("mode") or "mock")
+    print(json.dumps({"ok": True, "root": str(root), "mode": effective}, ensure_ascii=False))
 
 
 def verb_engine(flags: Dict[str, str]) -> None:
@@ -547,7 +549,14 @@ def verb_report(flags: Dict[str, str]) -> None:
         "timeline": pipeline.state.get("transition_log", []),
         "evidence": {
             "sds_design": {"exists": bool(sds), "confirmed": bool(sds.get("confirmed"))},
-            "etl_dev_exec": {"ok": ok_etl, "reason": etl_reason or None},
+            "etl_dev_exec": {
+                "ok": ok_etl,
+                "reason": etl_reason or None,
+                # 证据级别要出现在治理报告里：local_receipt 只证明"本机跑过"，
+                # 不能和平台侧 query_id 长得一样（COMPAT-005）。
+                "level": str((etl_ev or {}).get("evidence_level") or "") if isinstance(etl_ev, dict) else "",
+                "engine": str((etl_ev or {}).get("engine") or "") if isinstance(etl_ev, dict) else "",
+            },
             "test_runs": {
                 "exists": bool(test_runs),
                 "total": len(run_list),
@@ -575,7 +584,9 @@ def verb_report(flags: Dict[str, str]) -> None:
             "## 证据",
             "",
             f"- SDS: exists={report['evidence']['sds_design']['exists']}, confirmed={report['evidence']['sds_design']['confirmed']}",
-            f"- ETL 执行: {report['evidence']['etl_dev_exec']['ok']} {report['evidence']['etl_dev_exec']['reason'] or ''}",
+            f"- ETL 执行: {report['evidence']['etl_dev_exec']['ok']} {report['evidence']['etl_dev_exec']['reason'] or ''}"
+            f"（证据级别={report['evidence']['etl_dev_exec']['level'] or '未标注'}"
+            f"，engine={report['evidence']['etl_dev_exec']['engine'] or '-'}）",
             f"- 测试: total={report['evidence']['test_runs']['total']}, failed={report['evidence']['test_runs']['failed']}",
             f"- 部署日志: exists={report['evidence']['deploy_log']['exists']}, env={report['evidence']['deploy_log']['env'] or '-'}",
             f"- 回滚日志: exists={report['evidence']['rollback_log']['exists']}",
@@ -926,8 +937,9 @@ def verb_deploy(flags: Dict[str, str]) -> None:
     plan["publish_confirmed"] = True
     context.write_json(req / "deploy_plan.json", plan)
     client = platform()
-    sql_kind = str((CONFIG.get("platform") or {}).get("kind") or "cli")
-    file_platform = sql_kind in clients.SQL_PLATFORM_KINDS or sql_kind in clients.COMMAND_PLATFORM_KINDS
+    # 按"适配器能力"分流，而不是按配置 kind：mock 模式或未切换 live 时，
+    # 配置写着数据库 kind 但实际客户端是任务型的，按 kind 判会把 publish/backfill 调错对象。
+    file_platform = bool(getattr(client, "file_sql", False))
     results = []
     for item in plan.get("items", []):
         table = str(item.get("table", ""))
@@ -1027,13 +1039,12 @@ def verb_rollback(flags: Dict[str, str]) -> None:
     if not items:
         emit({"ok": False, "blocked": True, "reason": "deploy_plan 未配置任何 rollback_sql_file，无法回滚"})
         sys.exit(1)
-    sql_kind = str((CONFIG.get("platform") or {}).get("kind") or "cli")
-    file_platform = sql_kind in clients.SQL_PLATFORM_KINDS or sql_kind in clients.COMMAND_PLATFORM_KINDS
+    client = platform()
+    file_platform = bool(getattr(client, "file_sql", False))
     if not file_platform:
         emit({"ok": False, "blocked": True, "reason": "rollback 只支持 SQL/命令平台（kind=cli 请在平台侧回滚）"})
         sys.exit(1)
     env = str(flags.get("env") or plan.get("env") or "prod")
-    client = platform()
     results = []
     for item in items:
         rollback_file = req / str(item.get("rollback_sql_file"))
@@ -1275,6 +1286,9 @@ def _write_dev_artifacts(req: Path) -> None:
             "env": "dev",
             "run_at": context.utcnow(),
             "sql_files": ["etl/ads_user_act_di.sql"],
+            # demo 走 mock 平台：回执照实标 mock，别让演示产物看起来像真实执行证据
+            "evidence_level": engines.EVIDENCE_MOCK,
+            "engine": "mock",
         },
     )
 
@@ -1338,7 +1352,7 @@ def verb_demo(flags: Dict[str, str]) -> None:
     log: Callable[[str, str], None] = lambda gate, msg: steps.append({"gate": gate, "msg": msg})
 
     # setup + submit
-    verb_setup(flags)
+    verb_setup({**flags, "mode": "mock"})
     log("setup", f"项目初始化 mode={mode}")
     title = "【数据需求】用户活跃指标 L1 改造"
     description = _sample_description()

@@ -15,6 +15,7 @@
 * ``server_query_id``：引擎/平台返回服务端 query id，可回查（CLI 契约族）；
 * ``local_receipt``：本进程自造回执（``run_<hash>``）。**它不是平台 query id**，
   只能证明"这条 SQL 在本机执行过"，不能证明"平台侧查到过"；
+* ``mock``：mock 模式的模拟回执，**不构成任何真实执行证据**；
 * ``none``：不产生执行证据（会话内通道，预留给 kind=mcp）。
 """
 
@@ -34,9 +35,10 @@ FAMILIES = (FAMILY_DBAPI, FAMILY_COMMAND, FAMILY_CLI, FAMILY_MCP)
 # 证据级别
 EVIDENCE_SERVER = "server_query_id"
 EVIDENCE_LOCAL = "local_receipt"
+EVIDENCE_MOCK = "mock"
 EVIDENCE_NONE = "none"
 
-EVIDENCE_LEVELS = (EVIDENCE_SERVER, EVIDENCE_LOCAL, EVIDENCE_NONE)
+EVIDENCE_LEVELS = (EVIDENCE_SERVER, EVIDENCE_LOCAL, EVIDENCE_MOCK, EVIDENCE_NONE)
 
 # 湖表格式（与执行引擎正交）
 FORMAT_NONE = "none"

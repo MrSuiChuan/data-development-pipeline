@@ -115,6 +115,23 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(record["evidence_level"], engines.EVIDENCE_LOCAL)
         self.assertTrue(str(record["query_id"]).startswith("run_"))
 
+    def test_evidence_level_surfaces_in_gate_issues(self) -> None:
+        """级别不能只写在回执里：出口门必须把它带进结论（否则报告里看不出来）。"""
+        cases = (
+            ({"status": "SUCCESS", "query_id": "run_x", "evidence_level": engines.EVIDENCE_LOCAL},
+             "evidence.level.local_receipt"),
+            ({"status": "SUCCESS", "query_id": "q_x", "evidence_level": engines.EVIDENCE_MOCK},
+             "evidence.level.mock"),
+            ({"status": "SUCCESS", "query_id": "q_x"}, "evidence.level.unlabeled"),
+        )
+        for receipt, expected in cases:
+            codes = [i.code for i in validators.evidence_level_issues(receipt, 3, "etl_dev_exec.json")]
+            self.assertIn(expected, codes, receipt)
+            self.assertTrue(all(i.severity == "WARN" for i in validators.evidence_level_issues(receipt, 3, "f")))
+        server = {"status": "SUCCESS", "query_id": "q_x", "evidence_level": engines.EVIDENCE_SERVER}
+        self.assertEqual(validators.evidence_level_issues(server, 3, "f"), [])
+        self.assertEqual(validators.evidence_level_issues(None, 3, "f"), [])
+
 
 class DialectRuleTests(unittest.TestCase):
     """COMPAT-003：方言规则的判定与"不传 dialect 就完全不变"。"""
@@ -251,6 +268,81 @@ class PlatformDoctorTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             for needle in stale:
                 self.assertNotIn(needle, text, f"{path.name} 又抄了一份引擎清单")
+
+
+class MultiEngineEndToEndTests(unittest.TestCase):
+    """COMPAT-008：同一套流程在多个引擎族上跑通，且方言不匹配时真的被拦。
+
+    用 mock 模式的 demo（不碰真集群），它覆盖 P1→P6 全部门控：
+    换引擎族不改产物、不改结论 → 门控与引擎解耦；引擎方言与 SQL 不匹配 → P3 出口真拦，
+    而不是只在 `sql check` 里拦（"写的时候过了、出口门放行"是最容易骗过自己的组合）。
+    """
+
+    WORKING_KINDS = ("cli", "doris", "hive", "spark", "flink", "clickhouse", "odps")
+
+    def _demo_with_kind(self, kind: str):
+        tmp = tempfile.TemporaryDirectory()
+        root = Path(tmp.name)
+        # 先建目录再写平台配置：demo 内部会调 setup，而 setup 现在不覆盖已有 config
+        context.ensure_app_dir(root, mode="mock")
+        cfg = context.load_config(root)
+        cfg["platform"] = {"kind": kind, "host": "h", "command": {"run": ["probe", "{file}"]}}
+        context.write_json(context.config_path(root), cfg)
+        return tmp, root, run_engine(root, "demo")
+
+    def test_demo_outcome_and_artifacts_are_engine_agnostic(self) -> None:
+        signatures = {}
+        for kind in self.WORKING_KINDS:
+            tmp, root, proc = self._demo_with_kind(kind)
+            try:
+                self.assertEqual(proc.returncode, 0, f"{kind}: {proc.stdout[-600:]}")
+                signatures[kind] = sorted(
+                    p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()
+                )
+            finally:
+                tmp.cleanup()
+        baseline = signatures[self.WORKING_KINDS[0]]
+        self.assertTrue(baseline)
+        for kind, files in signatures.items():
+            self.assertEqual(files, baseline, f"{kind} 的产物集合与 cli 不一致")
+
+    def test_demo_is_blocked_when_sql_does_not_fit_the_configured_dialect(self) -> None:
+        """demo 的 dp_task 是分区覆盖写法：MySQL 协议族没有 INSERT OVERWRITE → P3 出口必须拦。"""
+        tmp, _root, proc = self._demo_with_kind("mysql")
+        try:
+            self.assertNotEqual(proc.returncode, 0, "MySQL 方言下这份 SQL 不该通过")
+            self.assertIn("dialect.mysql.no_insert_overwrite", proc.stdout + proc.stderr)
+        finally:
+            tmp.cleanup()
+
+    def test_setup_does_not_wipe_existing_platform_config(self) -> None:
+        """setup 曾经无条件重写 config.json：用户填好的执行器配置会被静默清掉。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            context.ensure_app_dir(root, mode="mock")
+            cfg = context.load_config(root)
+            cfg["platform"] = {"kind": "doris", "host": "127.0.0.1", "database": "ods"}
+            context.write_json(context.config_path(root), cfg)
+            proc = run_engine(root, "setup")
+            self.assertEqual(proc.returncode, 0, proc.stdout)
+            after = context.load_config(root)
+            self.assertEqual(after["platform"]["kind"], "doris")
+            self.assertEqual(after["platform"]["database"], "ods")
+
+    def test_adapter_capability_decides_p5_dispatch(self) -> None:
+        """P5 曾按配置 kind 判"文件型平台"，mock 模式下于是把任务型客户端当文件型用（崩溃）。"""
+        self.assertFalse(clients.MockPlatformClient(Path(".")).file_sql)
+        self.assertTrue(sql_platforms.SqlPlatformClient.file_sql)
+        self.assertTrue(sql_platforms.CommandPlatformClient.file_sql)
+        self.assertFalse(clients.LivePlatformClient.file_sql)
+
+    def test_gate_layer_does_not_branch_on_engine_family(self) -> None:
+        """门的判定不该按引擎族分叉：分派只允许发生在 clients/sql_platforms/engines。"""
+        for name in ("gates.py", "validators.py", "state.py"):
+            text = (ENGINE / "core" / name).read_text(encoding="utf-8")
+            self.assertNotIn("engines.FAMILY_", text, f"{name} 按引擎族特判")
+            self.assertNotIn("SQL_PLATFORM_KINDS", text, f"{name} 按 kind 清单特判")
+            self.assertNotIn("COMMAND_PLATFORM_KINDS", text, f"{name} 按 kind 清单特判")
 
 
 if __name__ == "__main__":
