@@ -344,6 +344,21 @@ class MultiEngineEndToEndTests(unittest.TestCase):
             self.assertNotIn("SQL_PLATFORM_KINDS", text, f"{name} 按 kind 清单特判")
             self.assertNotIn("COMMAND_PLATFORM_KINDS", text, f"{name} 按 kind 清单特判")
 
+    def test_matrix_covers_every_registered_kind(self) -> None:
+        """文档-注册表一致性（COMPAT-007）：矩阵必须覆盖每个已登记 kind，且不写未登记的。"""
+        matrix = (ROOT_REPO / "docs" / "engines" / "README.md").read_text(encoding="utf-8")
+        section = matrix.split("## 矩阵", 1)[1].split("## 逐引擎页", 1)[0]
+        rows = [line for line in section.splitlines() if line.startswith("| ") and line.count("|") >= 6]
+        cells = {line.split("|")[1].strip() for line in rows}
+        for kind in engines.available_kinds():
+            self.assertIn(kind, cells, f"docs/engines/README.md 缺 kind 行: {kind}")
+        known = set(engines.available_kinds())
+        for cell in cells:
+            first = cell.split()[0] if cell.split() else ""
+            if first in ("kind", "family", "dialect") or first.startswith("---"):
+                continue
+            self.assertIn(first, known, f"矩阵里写了未登记的 kind: {cell}")
+
 
 if __name__ == "__main__":
     unittest.main()

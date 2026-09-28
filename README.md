@@ -280,6 +280,8 @@ SessionStart 提示。
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：状态契约、八条规则/17 项检查/9 条部署规则细节、上下文键表；
 - [docs/REPRODUCTION-NOTES.md](docs/REPRODUCTION-NOTES.md)：连接器契约 + 已知边界与局限。
+- [docs/engines/README.md](docs/engines/README.md)：引擎接入矩阵（family/dialect/必填键/证据级别/验证状态）
+  与逐引擎 playbook（Hive、Spark、ClickHouse、Trino、PostgreSQL、MaxCompute）。
 
 ## License
 
