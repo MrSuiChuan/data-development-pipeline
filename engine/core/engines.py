@@ -197,6 +197,48 @@ def formats_of(kind: str) -> Tuple[str, ...]:
     return resolve(kind).formats
 
 
+def formats_for_dialect(dialect: str) -> Tuple[str, ...]:
+    """该方言下可用的湖表格式（多个 kind 共用方言时取并集）。"""
+    target = str(dialect or "").strip().lower()
+    out = set()
+    for spec in ENGINES.values():
+        if spec.dialect == target:
+            out.update(spec.formats)
+    return tuple(sorted(out)) or (FORMAT_NONE,)
+
+
+def validate_format(kind: str, fmt: str) -> None:
+    """校验 kind × format 组合；未登记的组合直接报错（不猜）。"""
+    from . import formats as formats_module  # 局部导入：formats 不反向依赖 engines
+
+    spec = resolve(kind)
+    name = str(fmt or FORMAT_NONE).strip().lower() or FORMAT_NONE
+    try:
+        formats_module.resolve(name)  # 未知格式在这里报错
+    except ValueError as err:
+        raise UnknownEngine(str(err))
+    if name not in spec.formats:
+        raise UnknownEngine(
+            f"{spec.kind} 未登记表格式 {name!r}。可用: {', '.join(spec.formats)}"
+        )
+
+
+def validate_format_for_dialect(dialect: str, fmt: str) -> None:
+    """按方言校验 format（ddl 渲染没有 kind，只有 dialect）。"""
+    from . import formats as formats_module
+
+    name = str(fmt or FORMAT_NONE).strip().lower() or FORMAT_NONE
+    try:
+        formats_module.resolve(name)
+    except ValueError as err:
+        raise UnknownEngine(str(err))
+    allowed = formats_for_dialect(dialect)
+    if name not in allowed:
+        raise UnknownEngine(
+            f"方言 {dialect} 未登记表格式 {name!r}。可用: {', '.join(allowed)}"
+        )
+
+
 def validate_registry() -> List[str]:
     """注册表自检：结构错误必须在测试里就炸，而不是等用户踩。"""
     problems: List[str] = []
@@ -289,6 +331,14 @@ def diagnose_platform(platform: Dict[str, object]) -> Dict[str, object]:
             "该执行族拿不到服务端 query_id：证据级别是 local_receipt，"
             "只能证明『这条 SQL 在本机执行过』，不能等价于平台 query_id"
         )
+    fmt = str(plat.get("format") or "none").strip().lower()
+    if fmt and fmt != FORMAT_NONE:
+        try:
+            validate_format(spec.kind, fmt)
+            report["format"] = fmt
+        except UnknownEngine as err:
+            report["ok"] = False
+            errors.append(str(err))
     if spec.note:
         report["note"] = spec.note
     return report

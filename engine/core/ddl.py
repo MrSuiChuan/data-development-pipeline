@@ -20,7 +20,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from . import engines
+from . import engines, formats
 
 # canonical 类型：够表达离线数仓的常规列，且每个都能映到所有已登记引擎
 CANONICAL_TYPES: Tuple[str, ...] = (
@@ -169,8 +169,8 @@ def _validate_spec(spec: Any) -> Dict[str, Any]:
     return spec
 
 
-def render_ddl(spec: Any, dialect: str) -> Dict[str, Any]:
-    """按方言渲染 CREATE TABLE。返回 {sql, dialect, table, warnings}。"""
+def render_ddl(spec: Any, dialect: str, fmt_override: Optional[str] = None) -> Dict[str, Any]:
+    """按方言（+ 可选湖表格式）渲染 CREATE TABLE。返回 {sql, dialect, format, table, warnings}。"""
     spec = _validate_spec(spec)
     dialect = str(dialect or "").strip().lower()
     if not TYPE_MAP.get(dialect):
@@ -185,15 +185,24 @@ def render_ddl(spec: Any, dialect: str) -> Dict[str, Any]:
     primary_key = [str(p) for p in (spec.get("primary_key") or [])]
     comment = str(spec.get("comment") or "").strip()
     properties = spec.get("properties") or {}
-    fmt = str(spec.get("format") or "none").strip().lower()
+    fmt = str(fmt_override or spec.get("format") or "none").strip().lower()
     if not isinstance(properties, dict):
         raise DdlError("spec.properties 必须是对象")
+    # 组合未登记就报错：湖表格式与执行引擎是正交维度，不能靠"差不多能跑"猜
+    try:
+        engines.validate_format_for_dialect(dialect, fmt)
+    except engines.UnknownEngine as err:
+        raise DdlError(str(err))
+    format_spec = formats.resolve(fmt)
 
-    def props_clause(prefix: str, key_wrap: str = "'", sep: str = "=") -> str:
-        items = ", ".join(
-            f"{key_wrap}{k}{key_wrap}{sep}{_quote_string(v)}" for k, v in sorted(properties.items())
+    def props_clause(prefix: str, key_wrap: str = "'", sep: str = "=", data: Optional[Dict[str, Any]] = None) -> str:
+        payload = properties if data is None else data
+        if not payload:
+            return ""
+        rendered = ", ".join(
+            f"{key_wrap}{k}{key_wrap}{sep}{_quote_string(v)}" for k, v in sorted(payload.items())
         )
-        return f"{prefix} ({items})"
+        return f"{prefix} ({rendered})"
 
     comments_on: List[str] = []
     if dialect in ("hive", "odps"):
@@ -222,7 +231,13 @@ def render_ddl(spec: Any, dialect: str) -> Dict[str, Any]:
         if comment:
             sql.append(f"COMMENT {_quote_string(comment)}")
         with_items = [(str(k), _quote_string(v)) for k, v in sorted(properties.items())]
-        with_items.append(("format", _quote_string((fmt if fmt != "none" else "parquet").upper())))
+        # Trino 的 format 指文件格式；表格式（iceberg/hudi/delta）由 catalog/connector 决定
+        with_items.append(("format", _quote_string("PARQUET")))
+        if fmt != "none":
+            warnings.append(
+                f"Trino 的 {format_spec.label} 由 catalog 决定（connector={fmt}）："
+                "DDL 里的 format 只是文件格式，建表前先确认 catalog 指向"
+            )
         if partition:
             with_items.append(("partitioned_by", "ARRAY[" + ", ".join(_quote_string(p) for p in partition) + "]"))
         sql.append("WITH (\n  " + ",\n  ".join(f"{k} = {v}" for k, v in with_items) + "\n)")
@@ -235,8 +250,14 @@ def render_ddl(spec: Any, dialect: str) -> Dict[str, Any]:
             sql.append(f"COMMENT {_quote_string(comment)}")
         if partition:
             sql.append(f"PARTITIONED BY ({', '.join(partition)})")
-        if properties:
-            sql.append(props_clause("WITH"))
+        merged = dict(properties)
+        if fmt != "none":
+            merged.setdefault("connector", fmt)
+            warnings.append(
+                f"{format_spec.label}：已补 'connector'='{fmt}'，其余参数（bucket/主键等）按 catalog 实际配置填"
+            )
+        if merged:
+            sql.append(props_clause("WITH", data=merged))
         else:
             warnings.append("Flink 建表没有 connector 选项（spec.properties）：catalog 表可以，connector 表必须补")
     elif dialect == "clickhouse":
@@ -307,9 +328,9 @@ def render_ddl(spec: Any, dialect: str) -> Dict[str, Any]:
     note = TIMESTAMP_NOTES.get(dialect)
     if note and any(isinstance(c, dict) and str(c.get("type")).lower() == "timestamp" for c in columns):
         warnings.append(note)
-    if fmt != "none" and dialect not in ("spark", "trino", "flink", "clickhouse"):
-        warnings.append(f"{dialect} 不支持 format={fmt} 的表格式声明，已忽略（湖表格式请用 spark/trino/flink）")
-    return {"sql": body, "dialect": dialect, "table": table, "warnings": warnings}
+    if fmt != "none":
+        warnings.extend(formats.guidance(fmt))
+    return {"sql": body, "dialect": dialect, "format": fmt, "table": table, "warnings": warnings}
 
 
 def validate_ddl_types(sql: str, dialect: str, known: Optional[Tuple[str, ...]] = None) -> List[str]:

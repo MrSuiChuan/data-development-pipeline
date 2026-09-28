@@ -92,6 +92,11 @@ tools/build_codex_surface.py 从 Claude 源生成 Codex 面（清单/hooks/入�
   Hive 的 `DECIMAL`、ClickHouse 的 `Decimal`、PostgreSQL 的 `NUMERIC` 不再靠人抄；
   未知类型/未知方言直接报错，渲染产物默认**不覆盖**已有 `ddl/` 文件（`--force` 才覆盖），
   而且只是起始模板——照样要过 `sql check` 与真实执行。
+- 湖表格式是独立维度：`platform.format`（`iceberg`/`hudi`/`paimon`/`delta`/`none`）与执行引擎**正交**，
+  组合未登记直接报错（`platform doctor` 就会拦）。建表与检查都认它：
+  `ddl render --format iceberg` 出 `USING iceberg` 并附写入/运维提示，
+  `sql check --format hudi` 会在缺 `primaryKey`、`VACUUM` 等有条件的写法上出 WARN。
+  组合矩阵与每条检查见 [docs/engines/README.md](docs/engines/README.md) 的湖表格式一节。
   接入通道选型（MCP/CLI/直连）、配置示例与证据级别说明见 docs/REPRODUCTION-NOTES.md 1.2.1 / 1.2.2。
 
 > 迁移提示：本轮只**新增可选能力**——方言检查（`--dialect`，不传即旧行为）、

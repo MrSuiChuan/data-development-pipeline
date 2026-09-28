@@ -169,6 +169,26 @@ canonical 类型（string/bigint/int/double/decimal/boolean/date/timestamp）
    写在 `)` 之外、MySQL 不生成 PROPERTIES、Trino 用 `WITH (format=…)` 而不是 Spark 的 `USING`——
    这几条都有回归用例（`tests/test_ddl.py::RenderTemplateTests`）。
 
+### 湖表格式维度（COMPAT-011）
+
+`engine/core/formats.py` 把 Iceberg / Hudi / Paimon / Delta 的差异写成数据，
+`platform.format`（缺省 `none`）是它的配置入口；**格式与执行引擎正交**，
+"能不能组合"由注册表判定（`engines.validate_format`），未登记的组合一律报错：
+
+```
+kind=spark + format=iceberg   ✅ 登记过        kind=hive + format=iceberg   ❌ 报错并列出可用格式
+kind=flink + format=paimon    ✅ 登记过        kind=spark + format=snowflake ❌ 未知格式
+```
+
+三处消费点：
+
+1. `platform doctor` 校验组合（配错在体检就能看到，不用等建表）；
+2. `ddl render` 按格式插建表片段（spark 的 `USING iceberg`、Flink 的 `connector` 注入、
+   Trino 的 catalog 说明），并把写入提示与运维清单挂进 warnings（过期快照、compaction、VACUUM…）；
+3. `sql check --format` / P3 出口门按格式出 WARN（Hudi 缺 primaryKey、Delta 的 VACUUM、
+   Iceberg 的行级 DELETE、Paimon 缺 bucket）。**全部是 WARN**——格式差异表达"有条件成立"，
+   不是语法错，不该阻断流水线。
+
 ### P4 机器证据门（最锋利的一刀）
 
 `test_report.md` 标 ✅ 的每个 `TC-xxxx`，必须在 `test_runs.json` 找到

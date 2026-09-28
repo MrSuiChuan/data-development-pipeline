@@ -46,6 +46,24 @@
       "timeout": 1800
     }
   },
+  "command_spark_iceberg": {
+    "kind": "spark",
+    "format": "iceberg",
+    "command": {
+      "engine": "spark",
+      "run": ["spark-sql", "--conf", "spark.sql.catalog.lake=org.apache.iceberg.spark.SparkCatalog", "-f", "{file}"],
+      "timeout": 1800
+    }
+  },
+  "command_flink_paimon": {
+    "kind": "flink",
+    "format": "paimon",
+    "command": {
+      "engine": "flink",
+      "run": ["flink", "sql", "-f", "{file}"],
+      "timeout": 1800
+    }
+  },
   "command_trino": {
     "kind": "trino",
     "command": {

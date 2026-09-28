@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import context, dialects, engines
+from . import context, dialects, engines, formats
 
 LEVELS = ("L0", "L1", "L2", "L3")
 SUMMARY_LAYERS = ("dws", "ads", "app")
@@ -541,6 +541,7 @@ def sql_compliance_check(
     is_dp_task: bool = False,
     ddl_targets: Optional[Sequence[str]] = None,
     dialect: Optional[str] = None,
+    sql_format: Optional[str] = None,
 ) -> List[Issue]:
     """17 rules. Rules 1..9 are zero-tolerance; 10..17 are WARN quality checks.
 
@@ -723,31 +724,59 @@ def sql_compliance_check(
                 detail={"dialect": hit["dialect"], "repair": hit["repair"]},
             )
         )
+
+    # --- lakehouse format rules (仅当显式给出 format 时生效) --------------
+    for hit in formats.format_issues(text, sql_format or "") if sql_format else []:
+        issues.append(
+            Issue(
+                str(hit["id"]),
+                phase,
+                str(hit["severity"]),
+                str(hit["message"]),
+                file=filename,
+                detail={"format": hit["format"], "repair": hit["repair"]},
+            )
+        )
     return issues
 
 
-def project_dialect(req_dir: Path) -> Optional[str]:
-    """按项目配置推导方言（供 P3 出口门用）；推导不出来就返回 None，只用基线 17 项。
+def project_engine_settings(req_dir: Path) -> Dict[str, Optional[str]]:
+    """按项目配置推导方言与湖表格式（供 P3 出口门用）。
 
-    未登记 kind 的报错责任在 `platform doctor` / `make_platform`，不在这里制造第二个错误面。
+    推导不出来就返回 None（只用基线 17 项）。未登记 kind/format 的报错责任在
+    `platform doctor` / `make_platform` / `ddl render`，不在这里制造第二个错误面。
     """
+    settings: Dict[str, Optional[str]] = {"dialect": None, "format": None}
     node = Path(req_dir)
     for _ in range(4):
         node = node.parent
         if (node / ".data-dev" / "config.json").is_file():
-            kind = str((context.load_config(node).get("platform") or {}).get("kind") or "cli")
+            platform = context.load_config(node).get("platform") or {}
+            kind = str(platform.get("kind") or "cli")
+            fmt = str(platform.get("format") or "none").strip().lower()
+            if fmt in ("", "none"):
+                fmt = ""
+            settings["format"] = fmt or None
             try:
-                return engines.dialect_of(kind)
+                settings["dialect"] = engines.dialect_of(kind)
             except engines.UnknownEngine:
-                return None
-    return None
+                settings["dialect"] = None
+            return settings
+    return settings
 
 
-def scan_sql_tree(req_dir: Path, dialect: Optional[str] = None) -> List[Issue]:
+def project_dialect(req_dir: Path) -> Optional[str]:
+    """兼容旧调用：只要方言。"""
+    return project_engine_settings(req_dir)["dialect"]
+
+
+def scan_sql_tree(req_dir: Path, dialect: Optional[str] = None, sql_format: Optional[str] = None) -> List[Issue]:
     """Run the 17-rule compliance scan over ddl/ etl/ dp_task/（外加该引擎的方言规则）。"""
     issues: List[Issue] = []
     if dialect is None:
         dialect = project_dialect(req_dir)
+    if sql_format is None:
+        sql_format = project_engine_settings(req_dir)["format"]
     ddl_targets = [p.stem for p in (req_dir / "ddl").glob("*.sql")] if (req_dir / "ddl").is_dir() else []
     for sub, is_task in (("ddl", False), ("etl", False), ("dp_task", True)):
         base = req_dir / sub
@@ -762,6 +791,7 @@ def scan_sql_tree(req_dir: Path, dialect: Optional[str] = None) -> List[Issue]:
                     is_dp_task=is_task,
                     ddl_targets=ddl_targets if sub != "ddl" else None,
                     dialect=dialect,
+                    sql_format=sql_format,
                 )
             )
     return issues

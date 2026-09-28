@@ -714,16 +714,21 @@ def verb_sql(flags: Dict[str, str]) -> None:
         except engines.UnknownEngine as err:
             print(f"[配置] {err}", file=sys.stderr)
             dialect = "generic"
+    sql_format = str(flags.get("format") or (CONFIG.get("platform") or {}).get("format") or "").strip()
+    if sql_format.lower() in ("none", ""):
+        sql_format = ""
     issues = validators.sql_compliance_check(
         text,
         filename=Path(filename).name,
         is_dp_task=bool(flags.get("task")),
         dialect=dialect,
+        sql_format=sql_format or None,
     )
     emit(
         {
             "ok": not validators.has_blockers(issues),
             "dialect": dialect,
+            "format": sql_format or "none",
             "issues": validators.issues_to_dicts(issues),
         }
     )
@@ -759,8 +764,9 @@ def verb_ddl(flags: Dict[str, str]) -> None:
         except engines.UnknownEngine as err:
             print(f"[配置] {err}", file=sys.stderr)
             dialect = "generic"
+    ddl_format = str(flags.get("format") or (CONFIG.get("platform") or {}).get("format") or "none").strip()
     try:
-        rendered = ddl.render_ddl(payload, dialect)
+        rendered = ddl.render_ddl(payload, dialect, fmt_override=ddl_format)
     except ddl.DdlError as err:
         emit({"ok": False, "blocked": True, "gate": "ddl_render", "reason": str(err)})
         sys.exit(1)
@@ -1610,7 +1616,8 @@ verbs:
   ctx set --key k [--value v] | ctx list      # 机器证据键除外，只能用 evidence
   evidence verify|selfcheck|confirm [--ticket <id>]   # 证据键只能由此写
   sql check --text '...' | --file x.sql [--task] [--dialect <hive|spark|doris|clickhouse|...>]
-  ddl render --spec <json> [--dialect <id>] [--out ddl/x.sql] [--force]   # 按引擎渲染建表模板
+  sql check ... [--format <iceberg|hudi|paimon|delta>]     # 湖表格式检查（缺省读 platform.format）
+  ddl render --spec <json> [--dialect <id>] [--format <id>] [--out ddl/x.sql] [--force]
   ddl types                                  # 列出 canonical 类型与有映射的方言
   platform doctor                            # 配置体检：kind/必填键/profiles/明文口令
   platform run-sql|check-grammar|create-task|read-task|update-task|submit|publish|backfill ...

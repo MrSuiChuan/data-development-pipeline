@@ -60,3 +60,27 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 
 其余 kind（MySQL 协议族、flink/paimon、command、cli、mcp）的连接方式见
 `docs/REPRODUCTION-NOTES.md` 1.2.1 / 1.2.2 与 `engine/templates/platform.example.json`。
+
+## 湖表格式（与执行引擎正交）
+
+表格式不是一个 kind，而是挂在引擎上的维度：配置 `platform.format`
+（`none` / `iceberg` / `hudi` / `paimon` / `delta`，缺省 `none`），
+由注册表判定"这个引擎能不能用这个格式"，组合未登记直接报错。
+
+| 格式 | 可用引擎（注册表登记） | 建表 DDL 关键差异 | 写入/运维要点 |
+| --- | --- | --- | --- |
+| iceberg | spark / trino / flink | `USING iceberg`（spark）；Trino 由 catalog 决定，DDL 里只写 `format` | 快照要 `expire_snapshots`；分区演进用 `ADD/DROP PARTITION FIELD` |
+| hudi | spark / trino / flink | `USING hudi` + `TBLPROPERTIES ('primaryKey','preCombineField')` | MOR 要跑 compaction；整表覆盖会绕开 upsert 语义 |
+| paimon | flink / spark | `WITH ('connector'='paimon','bucket'=...)` | compaction 与快照过期决定读性能；bucket 影响写并发 |
+| delta | spark / trino | `USING delta` | `OPTIMIZE` 并小文件、`VACUUM` 不可回滚（默认保留 7 天） |
+
+用法：
+
+```bash
+py -3 .data-dev/engine/ddp.py platform doctor                      # 校验 kind × format 组合
+py -3 .data-dev/engine/ddp.py ddl render --spec ods_x.json --format iceberg
+py -3 .data-dev/engine/ddp.py sql check --file etl/ods_x.sql --format hudi
+```
+
+格式检查只出 WARN（不阻断流水线）：它们表达的是"这个组合成立有条件"，不是"语法错"。
+具体规则见 `engine/core/formats.py`（每条都带修复建议）。

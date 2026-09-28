@@ -30,6 +30,12 @@
   PostgreSQL 的 `COMMENT ON` 独立语句）；未知类型/未知方言直接报错，
   `--out` 默认不覆盖已有 `ddl/` 文件（`--force` 才覆盖）。渲染产物是**起始模板**，
   仍须过 `sql check` 与真实执行。
+- **湖表格式维度 `engine/core/formats.py` + `platform.format`**：Iceberg / Hudi / Paimon / Delta
+  登记为与执行引擎**正交**的维度（组合合法性由注册表判定，未登记组合直接报错）。
+  每条格式给出写入提示与运维清单（快照过期、compaction、VACUUM、bucket 并发…），
+  `ddl render` 按格式插建表片段（spark `USING iceberg`、Flink 注入 `connector`、Trino 说明 catalog），
+  `sql check --format` 与 P3 出口门出格式相关的 WARN（Hudi 缺 `primaryKey`、Delta 的 `VACUUM`、
+  Iceberg 行级 `DELETE`、Paimon 缺 `bucket`）。格式检查**不阻断**流水线——它们表达"有条件成立"。
 - **证据级别写进回执**：dbapi/command 族的回执带 `evidence_level=local_receipt`
   （只证明本机执行过，不等于平台 query_id）；CLI 契约族是 `server_query_id`。
 - 新增 `tests/test_engines.py`（23 条）：注册表结构自检、投影唯一性、未登记 kind 的硬错误、
