@@ -36,3 +36,19 @@
 DDP 侧配置按 MySQL 协议走（`kind=command` + `mysql` 客户端连 9030），
 与 PostgreSQL/MySQL 两次真跑同一条路径；StarRocks 的建表模板（`UNIQUE KEY` + `DISTRIBUTED BY`）
 与类型映射（`DECIMAL(18,2)` 等）有单测，但**没有**真引擎背书。
+
+## 追加排查（2026-09-30，用户指出"可以装在 WSL"后重新逐条试过）
+
+StarRocks 的镜像**确实存在**，本轮把"能不能拉到"与"能不能跑"分开了：
+
+| 路径 | 结果 |
+| --- | --- |
+| 官方 Docker Hub 直连 | 超时（`registry-1.docker.io` 不可达） |
+| `docker.1ms.run` / `docker.1panel.live` / `hub.rat.dev` 的 manifest | **OK**（三个镜像源都确认有 `starrocks/allin1-ubuntu:3.3.9`） |
+| 实际拉取（每个镜像源都试了，单次上限 15 分钟、循环重试） | 层下载反复 `Retrying`：`docker.1ms.run` 超时（rc=124，但层有累积）、`docker.1panel.live` 连接超时、`hub.rat.dev` 卡在同一层 retry |
+| 官方发行包 `releases.starrocks.io`（3.3.9 / 3.2.12，带浏览器 UA） | `403` |
+| GitHub Releases（`api.github.com` 可达 ✓） | `StarRocks/starrocks` 的 release **资产数为 0**（3.5.21 / 4.0.14 / 3.5.20 均无资产） |
+| 华为云镜像（目录与直连文件路径） | 一律返回站点 SPA 页面（固定 12109 字节），不是 tar 包 |
+
+结论不变：**未验证**——镜像可达但层下载在本网络不稳定，多次尝试后仍未拉全；
+换到带宽稳定的镜像源后按下面第 3 节照抄即可（起容器 → 9030 → `kind=command` + `mysql` 客户端）。

@@ -24,6 +24,24 @@
 补充事实：`docker manifest inspect apache/doris:2.1.7-fe-x86_64` 等全部 MISS——
 它**不走** daemon 的镜像源，只能说明"Hub 直连不可用"，不能当成"镜像不存在"。
 
+## 追加排查（2026-09-30，用户指出"可以装在 WSL"后重新逐条试过）
+
+用户提示"组件可以装在 WSL 里"是对的——**Doris 本身当然能装**（官方就是 FE+BE 两个目录的 tar 包），
+卡点是**这个网络拿不到包**。为把结论钉死，又试了下面这些路径，全部失败：
+
+| 路径 | 结果 |
+| --- | --- |
+| 官方 Docker Hub（`apache/doris:2.1.7-fe-x86_64` 等 **9 个 tag**） | 直连超时 / 镜像源 `denied` / 三个第三方镜像（hub.rat.dev、docker.1ms.run、docker.1panel.live、dockerpull.org）**全部 MISS** |
+| Aliyun ACR（`registry.cn-hangzhou.aliyuncs.com/doris/doris`、`…/selectdb/doris`、北京区） | MISS |
+| Apache 镜像（Aliyun / USTC / 清华）：只有 `-src.tar.gz` | 目录里 **只有源码包**，没有 `-bin-x64.tar.xz` |
+| 官方二进制 OSS 桶（`apache-doris-releases.oss-{accelerate,cn-beijing}.aliyuncs.com`）：逐个版本试了 2.0.3 / 2.1.0 / 2.1.7 / 2.1.9 / 2.1.11 / 3.0.0 / 3.0.3 / 3.0.5 / 3.1.0 / 3.1.3 / 3.1.4 | 全部 `404`；桶**存在**（返回 OSS 错误 XML），但对象名猜不中 |
+| OSS 桶列举（`?list-type=2`） | `AccessDenied: The bucket you access does not belong to you` |
+| GitHub Releases（`api.github.com` 可达 ✓） | `apache/doris` 的 release **资产数为 0**（4.1.4.1 / 4.1.4 / 4.0.8 均无资产） |
+| 高校镜像 `/doris`（清华 403、北外 403、上交 404） | 不可用 |
+
+结论不变：**未验证**，但原因收敛成一句话——**Doris 的发行包在这个网络里拿不到**（不是装不了，
+也不是插件不兼容）。下面第 3 节的命令序列在有网的环境里可以直接照抄。
+
 ## 这一项**没有**证明什么（避免被读成结论）
 
 - 没有证明 Doris 与当前代码不兼容（本轮没跑起来过）；
