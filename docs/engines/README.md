@@ -65,6 +65,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 [PostgreSQL 16](TEST-REPORT-postgres-live.md) ｜ [MySQL 8.4.4](TEST-REPORT-mysql-live.md) ｜
 [ClickHouse 24.8](TEST-REPORT-clickhouse-live.md) ｜ [Trino 476](TEST-REPORT-trino-live.md) ｜
 [Hive 4.0](TEST-REPORT-hive-live.md) ｜ [Spark 4.1.3](TEST-REPORT-spark-live.md) ｜
+[湖表格式 ×4（Iceberg/Delta/Hudi/Paimon）](TEST-REPORT-lakehouse-live.md) ｜
 [Doris（早于本轮）](TEST-REPORT-doris-live.md)。
 
 ## 湖表格式（与执行引擎正交）
@@ -75,10 +76,10 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 
 | 格式 | 可用引擎（注册表登记） | 建表 DDL 关键差异 | 写入/运维要点 |
 | --- | --- | --- | --- |
-| iceberg | spark / trino / flink | `USING iceberg`（spark）；Trino 由 catalog 决定，DDL 里只写 `format` | 快照要 `expire_snapshots`；分区演进用 `ADD/DROP PARTITION FIELD` |
-| hudi | spark / trino / flink | `USING hudi` + `TBLPROPERTIES ('primaryKey','preCombineField')` | MOR 要跑 compaction；整表覆盖会绕开 upsert 语义 |
-| paimon | flink / spark | `WITH ('connector'='paimon','bucket'=...)` | compaction 与快照过期决定读性能；bucket 影响写并发 |
-| delta | spark / trino | `USING delta` | `OPTIMIZE` 并小文件、`VACUUM` 不可回滚（默认保留 7 天） |
+| iceberg | spark / trino / flink | `USING iceberg`（spark）；Trino 由 catalog 决定，DDL 里只写 `format` | 快照要 `expire_snapshots`；分区演进用 `ADD/DROP PARTITION FIELD`。**Spark 真跑通过（1.11.0，2026-09-29）** |
+| hudi | spark / trino / flink | `USING hudi` + `TBLPROPERTIES ('primaryKey','preCombineField')` | MOR 要跑 compaction；整表覆盖会绕开 upsert 语义；**Spark 侧还需 `spark.serializer=KryoSerializer`**。**真跑通过（1.2.0，2026-09-29）** |
+| paimon | flink / spark | `WITH ('connector'='paimon','bucket'=...)` | compaction 与快照过期决定读性能；bucket 影响写并发；Spark 侧需 `PaimonSparkSessionExtensions`。**真跑通过（2.0.0，2026-09-29）** |
+| delta | spark / trino | `USING delta` | `OPTIMIZE` 并小文件、`VACUUM` 不可回滚（默认保留 7 天）；**Spark 侧用 `--packages` 解析传递依赖（单 jar 会 NoClassDefFoundError）**。**真跑通过（4.4.0，2026-09-29）** |
 
 用法：
 

@@ -32,7 +32,13 @@
   `DELETE` 被拒（`UNSUPPORTED_FEATURE.TABLE_OPERATION: does not support DELETE`），
   印证"行级写要靠湖表"。两条环境经验写进 playbook：发行包解压目录带 `-bin-hadoop3` 后缀；
   冷启动约 410s（`timeout` 别按秒级配）。
-  报告：[docs/TEST-REPORT-spark-live.md](docs/TEST-REPORT-spark-live.md)。
+ 报告：[docs/TEST-REPORT-spark-live.md](docs/TEST-REPORT-spark-live.md)。
+- **四种湖表格式真跑通过**（Spark 4.1.3 宿主）：Iceberg 1.11.0、Delta 4.4.0、Hudi 1.2.0、Paimon 2.0.0
+  各自完成建表 → 写入 → 读回 **3 行 / 60.75** → 账本 → `evidence verify` → **P3 出口门 FAIL=0**。
+  三个必须这样配的坑写成可照抄的配置：Delta 要用 `--packages`（单 jar 缺 `delta-storage` 类）、
+  Hudi 要 `spark.serializer=KryoSerializer`（否则写入阶段 SparkSubmit 级失败）、
+  Paimon 要 `PaimonSparkSessionExtensions`（它自己的检查会报）。
+  报告：[docs/TEST-REPORT-lakehouse-live.md](docs/TEST-REPORT-lakehouse-live.md)。
 - 新增实验手册 [docs/engines/lab.md](docs/engines/lab.md)：一个组件一次、项目目录先建再挂载、
   项目放 Windows 文件系统（`/tmp` 会随 WSL 重启蒸发）、口令走环境变量、从 `DROP TABLE` 的干净起点开始。
 
