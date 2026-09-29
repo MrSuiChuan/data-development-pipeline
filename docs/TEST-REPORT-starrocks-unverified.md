@@ -65,3 +65,29 @@ StarRocks 的镜像**确实存在**，本轮把"能不能拉到"与"能不能跑
 
 **本轮到这里停下的原因**：剩余轮次仍需数十分钟以上，且不保证成功；与其把时间花在等镜像，
 不如把现场与续跑方式留清楚。**状态仍是未验证**，等镜像落地或换网络后按第 3 节照抄即可。
+
+### 更好的配方：FE / BE 分开拉（2026-09-30 追加）
+
+all-in-one 镜像（`starrocks/allin1-ubuntu:3.3.9`）太大、总在某一大层上反复重试；
+官方 docker-compose 拓扑用的**两个小镜像**在三个镜像源上同样存在，实测更可行：
+
+| 镜像 | hub.rat.dev | docker.1ms.run | docker.1panel.live |
+| --- | --- | --- | --- |
+| `starrocks/fe-ubuntu:3.3.9` | ✅ | ✅ | ✅ |
+| `starrocks/be-ubuntu:3.3.9` | ✅ | ✅ | ✅ |
+
+路线（脚本：`.tmp/live-starrocks/run-split.sh`）：
+
+```bash
+docker network create ddp-sr-net
+docker run -d --name ddp-sr-fe --network ddp-sr-net --network-alias starrocks-fe \
+  -p 8030:8030 -p 9020:9020 -p 9030:9030 hub.rat.dev/starrocks/fe-ubuntu:3.3.9
+docker run -d --name ddp-sr-be --network ddp-sr-net --network-alias starrocks-be \
+  -p 8040:8040 hub.rat.dev/starrocks/be-ubuntu:3.3.9
+mysql -h 127.0.0.1 -P 9030 -uroot -e "ALTER SYSTEM ADD BACKEND 'starrocks-be:8040'"
+# 等 SHOW BACKENDS 里 Alive=true，再跑 DDP 流程（kind=command + mysql 客户端，9030）
+```
+
+**当前进度（如实记录）**：FE 镜像的多层已陆续 `Download complete`（层会续传），
+但每一轮 15 分钟仍会在某个大层上超时；脚本自带 4 轮重试，失败会打印 `PULL_FAILED`。
+这一条仍是**未验证**——只把"怎么拉、拉到哪一步"写清楚。
