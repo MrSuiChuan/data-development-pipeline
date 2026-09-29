@@ -27,6 +27,12 @@
   移出列定义并给说明性 WARN（ClickHouse/PG/Spark/Trino 仍要求分区键是真实列）。
   非 ACID 表的 `UPDATE` 被真引擎拒绝（`Error 10294`），FAIL 规则有真依据。
   报告：[docs/TEST-REPORT-hive-live.md](docs/TEST-REPORT-hive-live.md)。
+- **Spark SQL 4.1.3 真跑通过**（local 模式）：建表 → 写入 → 读回 **3 行 / 60.75** → 账本 →
+  `evidence verify` → **P3 出口门 FAIL=0**。方言规则得到真引擎背书：普通 parquet 表上
+  `DELETE` 被拒（`UNSUPPORTED_FEATURE.TABLE_OPERATION: does not support DELETE`），
+  印证"行级写要靠湖表"。两条环境经验写进 playbook：发行包解压目录带 `-bin-hadoop3` 后缀；
+  冷启动约 410s（`timeout` 别按秒级配）。
+  报告：[docs/TEST-REPORT-spark-live.md](docs/TEST-REPORT-spark-live.md)。
 - 新增实验手册 [docs/engines/lab.md](docs/engines/lab.md)：一个组件一次、项目目录先建再挂载、
   项目放 Windows 文件系统（`/tmp` 会随 WSL 重启蒸发）、口令走环境变量、从 `DROP TABLE` 的干净起点开始。
 

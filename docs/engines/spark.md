@@ -8,7 +8,7 @@
 | 必填配置键 | `platform.command.run` |
 | 证据级别 | `local_receipt` |
 | 湖表格式 | `iceberg` / `hudi` / `delta` / `paimon` / `none` |
-| 验证状态 | 未在真实 Spark 上联调 |
+| 验证状态 | **真跑通过（Spark 4.1.3 local 模式，2026-09-29）**，见 docs/TEST-REPORT-spark-live.md；YARN/K8s 未验 |
 
 ## 配置示例
 
@@ -27,6 +27,13 @@
 
 `--conf` 之类的 catalog 参数（Iceberg/Hudi/Paimon）按集群实际配置写在 `run` 里，
 插件不猜；换集群只改这一行。
+
+两个真跑踩到的点：
+
+1. **发行包解压目录带后缀**：`spark-4.1.3-bin-hadoop3/`，不是 `spark-4.1.3/`；
+   路径写错的表现是 `spark-sql: No such file or directory`。
+2. **冷启动按分钟计**：local 模式首个 `spark-sql -f` 约 410s（JVM + metastore 初始化），
+   之后每条语句 20-40s；`timeout` 别按秒级配。
 
 ## 方言差异（`sql check --dialect spark`）
 
