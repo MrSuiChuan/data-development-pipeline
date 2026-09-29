@@ -91,3 +91,19 @@ py -3 tools/live_probe.py --project <项目> --table <表> --spec <spec.json> --
 | --- | --- | --- |
 | Apache Doris | 镜像源拒绝该命名空间；Aliyun Apache 镜像的 tarball 路径 404 | 见 `docs/TEST-REPORT-doris-unverified.md`（四条尝试的原始报错） |
 | StarRocks | Hub 直连超时、daocloud 镜像层反复 retry（多次尝试仍未拉全） | 见 `docs/TEST-REPORT-starrocks-unverified.md` |
+
+## 把插件本身装到 WSL（验过的路径）
+
+```bash
+git clone <仓库> ~/rtd && cd ~/rtd
+python3 tools/adapt_hooks.py --check     # 会提示 launchers=[py -3] 不可用
+python3 tools/adapt_hooks.py             # 切成本机 python3（README 第 3 步，必做）
+python3 tools/adapt_hooks.py --check     # 通过：launchers=[python3]
+python3 engine/ddp.py demo --root /tmp/ddp-demo   # 不碰真实组件，跑通 P1→P6 闭环
+python3 -m unittest discover -s tests    # 246 OK
+```
+
+实测（2026-09-30，WSL2 Debian 13 / Python 3.13.5，克隆到 Linux 文件系统）：
+上述步骤全通，`demo` 输出 `{"ok": true, "mode": "mock"}`。
+**唯一必做的手工步骤是 `adapt_hooks`**——不做的话 hook 命令会失败，而宿主把 hook 失败当放行，
+十几道硬门会静默失效（仓库 README 就写着这条）。
