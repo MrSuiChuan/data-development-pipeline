@@ -37,7 +37,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 | spark | command | spark | command.run | - | iceberg/hudi/delta/paimon/none | 未在真实 Spark 上跑过 |
 | flink | command | flink | command.run | - | paimon/iceberg/hudi/none | 插件侧未真跑（开源栈真跑记录见 realtime-data-plugin 的 docs/oss-lab.md） |
 | paimon | command | flink | command.run | - | paimon | 同上（通过 Flink catalog 访问） |
-| clickhouse | command | clickhouse | command.run | 9000 | none | 未在真实 ClickHouse 上跑过 |
+| clickhouse | command | clickhouse | command.run | 9000 | none | **真跑通过（ClickHouse 24.8.14.39，2026-09-29）**：模板直接建表成功、P3 出口门 FAIL=0；UPDATE…FROM 的真报错与 mutation 行为见报告 |
 | trino | command | trino | command.run | 8080 | iceberg/hudi/delta/none | 未在真实 Trino 上跑过 |
 | presto | command | trino | command.run | 8080 | none | 未验证（与 Trino 共用方言规则） |
 | postgres | command | postgres | command.run | 5432 | none | **真跑通过（PostgreSQL 16，2026-09-28）**：建表/写入/读回/证据落账/verify |
@@ -63,7 +63,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 
 真实引擎联调报告（含命令、原始输出与失败案例）：
 [PostgreSQL 16](TEST-REPORT-postgres-live.md) ｜ [MySQL 8.4.4](TEST-REPORT-mysql-live.md) ｜
-[Doris（早于本轮）](TEST-REPORT-doris-live.md)。
+[ClickHouse 24.8](TEST-REPORT-clickhouse-live.md) ｜ [Doris（早于本轮）](TEST-REPORT-doris-live.md)。
 
 ## 湖表格式（与执行引擎正交）
 

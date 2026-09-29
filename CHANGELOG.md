@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added（组件真跑矩阵：逐个本地起、逐个真跑）
+
+上一轮把兼容能力做成了代码与单测，但验证矩阵里只有 PostgreSQL 与 MySQL 是真跑通过。
+本轮开始逐个把矩阵填实（台账 `goal#component-live-matrix` 的 LIVE-001…LIVE-010），
+纪律是**一次只起必要的组件**，跑完即停（本机 7.8 GB 内存）。
+
+- **ClickHouse 24.8 真跑通过**：渲染模板原样执行成功（`Int64` / `Decimal(18, 2)` / `Date`），
+  建表 → 写入 → 读回（3 行 / 60.75）→ 账本 → `evidence verify` → **P3 出口门 FAIL=0**。
+  两条方言规则得到真引擎背书：`UPDATE ... FROM` 真报 `SYNTAX_ERROR`（退出码 62）；
+  `ALTER ... UPDATE` 立即返回且 `system.mutations` 待办 0（证实是条件性 WARN）。
+  报告：[docs/TEST-REPORT-clickhouse-live.md](docs/TEST-REPORT-clickhouse-live.md)。
+- 新增实验手册 [docs/engines/lab.md](docs/engines/lab.md)：一个组件一次、项目目录先建再挂载、
+  项目放 Windows 文件系统（`/tmp` 会随 WSL 重启蒸发）、口令走环境变量、从 `DROP TABLE` 的干净起点开始。
+
 ### Added（面向主流大数据组件的任务开发兼容：引擎注册表 + 按方言检查）
 
 离线插件原先只认识两类引擎（MySQL 协议族 + 五个 command 引擎），引擎清单散在
