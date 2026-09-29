@@ -20,6 +20,13 @@
   `partitioned_by` 会 WARN 提醒是 connector 属性。`INSERT OVERWRITE` 的真报错
   （`mismatched input 'OVERWRITE'`）也让该 FAIL 规则有了真引擎依据。
   报告：[docs/TEST-REPORT-trino-live.md](docs/TEST-REPORT-trino-live.md)。
+- **Hive 4.0 真跑通过**（单机 HiveServer2 + beeline）：建表 → 静态分区写入 →
+  读回 **3 行 / 60.75**、`SHOW PARTITIONS` 看到 `ds=2026-09-28` → 账本 → `evidence verify` →
+  **P3 出口门 FAIL=0**。修掉模板缺陷：Hive/ODPS 的分区列只能写在 `PARTITIONED BY` 里，
+  原模板会把 `ds` 同时留在列定义 → `Duplicate column name`；现在 hive/odps 渲染时把分区列
+  移出列定义并给说明性 WARN（ClickHouse/PG/Spark/Trino 仍要求分区键是真实列）。
+  非 ACID 表的 `UPDATE` 被真引擎拒绝（`Error 10294`），FAIL 规则有真依据。
+  报告：[docs/TEST-REPORT-hive-live.md](docs/TEST-REPORT-hive-live.md)。
 - 新增实验手册 [docs/engines/lab.md](docs/engines/lab.md)：一个组件一次、项目目录先建再挂载、
   项目放 Windows 文件系统（`/tmp` 会随 WSL 重启蒸发）、口令走环境变量、从 `DROP TABLE` 的干净起点开始。
 

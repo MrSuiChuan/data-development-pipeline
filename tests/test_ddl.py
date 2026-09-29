@@ -143,6 +143,27 @@ class RenderTemplateTests(unittest.TestCase):
             sql = ddl.render_ddl(SPEC, dialect)["sql"]
             self.assertIn(f"PARTITIONED BY (ds STRING)", sql)
 
+    def test_hive_partition_column_is_not_duplicated(self) -> None:
+        """真实 Hive 会报 Duplicate column name：分区列只能出现在 PARTITIONED BY 里。
+
+        SPEC 的 columns 里带 ds（PG/ClickHouse 需要它是普通列），渲染 hive 时必须把它从
+        列定义里拿掉，并说明为什么。
+        """
+        result = ddl.render_ddl(SPEC, "hive")
+        body = result["sql"].split("PARTITIONED BY", 1)[0]
+        self.assertNotIn("ds DATE", body)
+        self.assertIn("PARTITIONED BY (ds STRING)", result["sql"])
+        self.assertTrue(any("分区列" in w and "Duplicate" in w for w in result["warnings"]), result["warnings"])
+
+        # odps 同规则
+        odps = ddl.render_ddl(SPEC, "odps")
+        self.assertNotIn("ds DATE", odps["sql"].split("PARTITIONED BY", 1)[0])
+
+        # 其它方言保留该列（它们需要分区键是真实列）
+        for dialect in ("clickhouse", "postgres", "spark"):
+            sql = ddl.render_ddl(SPEC, dialect)["sql"]
+            self.assertIn("ds", sql.split(")", 1)[0], dialect)
+
     def test_timestamp_semantics_warning_is_attached(self) -> None:
         for dialect in ("mysql", "odps", "flink", "clickhouse", "postgres"):
             warnings = ddl.render_ddl(SPEC, dialect)["warnings"]

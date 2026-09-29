@@ -180,9 +180,39 @@ def render_ddl(spec: Any, dialect: str, fmt_override: Optional[str] = None) -> D
     warnings: List[str] = []
     table = str(spec["table"]).strip()
     columns = spec["columns"]
-    columns_sql = ",\n".join(_column_line(dialect, c if isinstance(c, dict) else {}) for c in columns)
     partition = [str(p) for p in (spec.get("partition_by") or [])]
     primary_key = [str(p) for p in (spec.get("primary_key") or [])]
+    # 分区列在不同引擎里的声明位置不同（真实引擎教训）：
+    # Hive/ODPS 的分区列**只**写在 PARTITIONED BY 里，若同时出现在列定义里就是
+    # "Duplicate column name"；ClickHouse/PostgreSQL 的分区列必须是普通列。
+    partition_set = {p.lower() for p in partition}
+    effective_columns = list(columns)
+    if dialect in ("hive", "odps") and partition_set:
+        dropped = [c for c in columns if isinstance(c, dict) and str(c.get("name", "")).lower() in partition_set]
+        if dropped:
+            effective_columns = [
+                c for c in columns
+                if not (isinstance(c, dict) and str(c.get("name", "")).lower() in partition_set)
+            ]
+            warnings.append(
+                f"{dialect} 的分区列只写在 PARTITIONED BY 里：已从列定义中移除 "
+                f"{'、'.join(str(c.get('name')) for c in dropped)}（否则报 Duplicate column name）"
+            )
+    if partition and dialect in ("hive", "odps"):
+        declared = {str(c.get("name", "")).lower() for c in columns if isinstance(c, dict)}
+        for name in partition:
+            if name.lower() not in declared:
+                warnings.append(f"分区列 {name} 未在 columns 里给出类型，按 STRING 生成（Hive/ODPS 惯例）")
+    if partition and dialect in ("clickhouse", "postgres", "spark", "trino"):
+        declared = {str(c.get("name", "")).lower() for c in columns if isinstance(c, dict)}
+        for name in partition:
+            if name.lower() not in declared:
+                warnings.append(
+                    f"分区键 {name} 不在列定义里：{dialect} 的分区键引用的是已存在的列，请确认类型来源"
+                )
+    columns_sql = ",\n".join(
+        _column_line(dialect, c if isinstance(c, dict) else {}) for c in effective_columns
+    )
     comment = str(spec.get("comment") or "").strip()
     properties = spec.get("properties") or {}
     fmt = str(fmt_override or spec.get("format") or "none").strip().lower()
