@@ -39,6 +39,17 @@
   Hudi 要 `spark.serializer=KryoSerializer`（否则写入阶段 SparkSubmit 级失败）、
   Paimon 要 `PaimonSparkSessionExtensions`（它自己的检查会报）。
   报告：[docs/TEST-REPORT-lakehouse-live.md](docs/TEST-REPORT-lakehouse-live.md)。
+- **Doris / StarRocks 本轮未能起起来：如实标"未验证"**（不是"不兼容"）：
+  Doris 的四条路（Hub 直连超时、镜像源 `denied`、Aliyun Apache tarball 404）与 StarRocks 的
+  五次尝试（403 / SPA 假 200 / 镜像层反复 retry 后超时）逐条留在
+  [TEST-REPORT-doris-unverified.md](docs/TEST-REPORT-doris-unverified.md) 与
+  [TEST-REPORT-starrocks-unverified.md](docs/TEST-REPORT-starrocks-unverified.md)；
+  历史文件 `TEST-REPORT-doris-live.md`（2026-09-13）保持原样，只作历史记录。
+- **ODPS 标注为"不可本地复现"**：`docs/engines/odps.md` 分"能本地验（模板/方言规则/doctor 有单测）"
+  与"不能本地验（真跑、odcmd 认证）"两层，并给出跑通所需条件，不再用含糊的"未验证"。
+- **新增 `tools/live_probe.py`**：把真跑的引擎无关部分（doctor → ddl render → 建表 → 写入 → 读回 →
+  `evidence verify`）固化成一条命令，支持 `--dry-run` 与 `--stop-container`；
+  `docs/engines/lab.md` 补上十行"组件配方表"（各引擎的起容器命令与 argv 要点）。
 - 新增实验手册 [docs/engines/lab.md](docs/engines/lab.md)：一个组件一次、项目目录先建再挂载、
   项目放 Windows 文件系统（`/tmp` 会随 WSL 重启蒸发）、口令走环境变量、从 `DROP TABLE` 的干净起点开始。
 

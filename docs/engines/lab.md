@@ -57,3 +57,37 @@ docker stop ddp-<engine>
 
 通用脚本：`.tmp/live-common/p3_gate.sh`（补 P3 输入 + 跑真实出口门）。
 每组件的完整脚本在 `.tmp/live-<engine>/run.sh`，日志 `out.log`（都在 `.tmp`，不入库）。
+
+## 标准化跑法：`tools/live_probe.py`
+
+引擎无关的那段（doctor → ddl render → 建表 → 写入 → 读回 → evidence verify）已经收进仓库：
+
+```bash
+py -3 tools/live_probe.py --project .tmp/live-ch/proj --table ods_orders_live --spec .tmp/live-ch/proj/spec.json
+py -3 tools/live_probe.py --project <项目> --table <表> --spec <spec.json> --dry-run      # 只打印命令
+py -3 tools/live_probe.py --project <项目> --table <表> --spec <spec.json> --stop-container ddp-ch
+```
+
+引擎特有的东西（argv、镜像、端口、湖表 catalog）留在项目配置里——下表就是各组件的"配方"。
+
+## 各组件配方（本轮实测可用）
+
+| 组件 | 怎么起 | argv 要点 |
+| --- | --- | --- |
+| ClickHouse 24.8 | `docker run -d --name ddp-ch -p 9000:9000 -v <proj>:<proj> -e CLICKHOUSE_PASSWORD=ddp clickhouse/clickhouse-server:24.8` | `docker exec -i -e CLICKHOUSE_PASSWORD=ddp ddp-ch clickhouse-client --multiquery --queries-file {file}` |
+| Trino 476 | `docker run -d --name ddp-trino -p 8080:8080 -v <proj>/trino/catalog:/etc/trino/catalog trinodb/trino:476`（catalog 里放 `memory.properties`） | 宿主跑官方 CLI：`java -jar trino-cli-476-executable.jar --server http://127.0.0.1:8080 --catalog memory --file {file}`；**就绪判断要跑真查询** |
+| Hive 4.0 | `docker run -d --name ddp-hive -p 10000:10000 -v <proj>:<proj> apache/hive:4.0.0` | `docker exec -i ddp-hive beeline -u jdbc:hive2://localhost:10000/default -f {file}`（**别用 bash -lc 包**） |
+| Spark 4.1.3 | 宿主解压 `spark-4.1.3-bin-hadoop3`（注意目录后缀） | `spark-sql --master local[2] --conf spark.sql.warehouse.dir=<lab>/warehouse -f {file}`；冷启动约 410s |
+| Spark + Iceberg 1.11.0 | 同上 + `--jars iceberg-spark-runtime-4.1_2.13-1.11.0.jar` | 加 `spark.sql.extensions=…IcebergSparkSessionExtensions`、`spark.sql.catalog.lake=…SparkCatalog`、`…type=hadoop` |
+| Spark + Delta 4.4.0 | `--packages io.delta:delta-spark_4.1_2.13:4.4.0 --repositories <aliyun>` | 单 jar 会缺 `delta-storage`；加 DeltaSparkSessionExtension + DeltaCatalog |
+| Spark + Hudi 1.2.0 | 同上 + `--jars hudi-spark4.1-bundle_2.13-1.2.0.jar` | **必须** `spark.serializer=KryoSerializer`；表加 `primaryKey/preCombineField/type=COW` |
+| Spark + Paimon 2.0.0 | `--packages org.apache.paimon:paimon-spark-4.1_2.13:2.0.0` | **必须** `spark.sql.extensions=…PaimonSparkSessionExtensions` |
+| PostgreSQL 16 | `docker run -d --name ddp-pg -e POSTGRES_HOST_AUTH_METHOD=trust -p 55432:5432 postgres:16` | `psql -v ON_ERROR_STOP=1 -h {host} -p {port} -U {user} -d {database} -f {file}` |
+| MySQL 8.4 | `docker run -d --name ddp-my -e MYSQL_ROOT_PASSWORD=ddp -p 53306:3306 mysql:8.4.4` | `mysql -h {host} -P {port} -u {user} -D {database} -e {sql}`；口令走 `MYSQL_PWD` |
+
+## 起不来的组件（本轮失败现场）
+
+| 组件 | 为什么起不来 | 现场 |
+| --- | --- | --- |
+| Apache Doris | 镜像源拒绝该命名空间；Aliyun Apache 镜像的 tarball 路径 404 | 见 `docs/TEST-REPORT-doris-unverified.md`（四条尝试的原始报错） |
+| StarRocks | Hub 直连超时、daocloud 镜像层反复 retry（多次尝试仍未拉全） | 见 `docs/TEST-REPORT-starrocks-unverified.md` |

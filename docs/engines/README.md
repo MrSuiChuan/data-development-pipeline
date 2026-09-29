@@ -30,8 +30,8 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 | mysql | dbapi | mysql | host | 3306 | none | **真跑通过（经 kind=command + engine=mysql，MySQL 8.4.4，2026-09-28）**；dbapi/pymysql 直连路径未跑 |
 | tidb | dbapi | mysql | host | 4000 | none | 未验证（按 MySQL 方言处理） |
 | oceanbase | dbapi | mysql | host | 2881 | none | 未验证（MySQL 模式） |
-| doris | dbapi | doris | host | 9030 | none | **本机真跑过**（docs/TEST-REPORT-doris-live.md，dbapi 直连） |
-| starrocks | dbapi | starrocks | host | 9030 | none | 未验证（方言与 Doris 相近但未逐条核对） |
+| doris | dbapi | doris | host | 9030 | none | **本轮未验证**（镜像源拒绝 `apache/doris`、Aliyun tarball 404）：见 [TEST-REPORT-doris-unverified.md](TEST-REPORT-doris-unverified.md)；旧报告 [TEST-REPORT-doris-live.md](TEST-REPORT-doris-live.md)（2026-09-13）是更早环境的记录，本轮未复现 |
+| starrocks | dbapi | starrocks | host | 9030 | none | **本轮未验证**（镜像拉取多次失败）：见 [TEST-REPORT-starrocks-unverified.md](TEST-REPORT-starrocks-unverified.md) |
 | generic-sql | dbapi | generic | host | - | none | 未验证（按 MySQL 协议） |
 | hive | command | hive | command.run | - | none | **真跑通过（Hive 4.0 单机，2026-09-29）**：分区列模板修正后建表成功、读回 3 行/60.75、P3 出口门 FAIL=0 |
 | spark | command | spark | command.run | - | iceberg/hudi/delta/paimon/none | **真跑通过（Spark 4.1.3 local 模式，2026-09-29）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0 |
@@ -42,7 +42,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 | presto | command | trino | command.run | 8080 | none | 未验证（与 Trino 共用方言规则） |
 | postgres | command | postgres | command.run | 5432 | none | **真跑通过（PostgreSQL 16，2026-09-28）**：建表/写入/读回/证据落账/verify |
 | greenplum | command | postgres | command.run | 5432 | none | 未验证（GP 专有项未建模） |
-| odps | command | odps | command.run | - | none | 未验证（别名 maxcompute） |
+| odps | command | odps | command.run | - | none | **不可本地复现**（云服务）：模板/方言规则/doctor 有单测，真跑需要云账号 + 项目空间，见 [odps.md](odps.md) |
 | command | command | generic | command.run | - | none | 自定义 argv，按 generic 方言 |
 | cli | cli | generic | -（默认执行名 platform） | - | none | 契约在 docs/REPRODUCTION-NOTES.md 1.2.2，未接真实平台 |
 | mcp | mcp | generic | - | - | none | 预留；引擎不直调 |
@@ -66,7 +66,9 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 [ClickHouse 24.8](TEST-REPORT-clickhouse-live.md) ｜ [Trino 476](TEST-REPORT-trino-live.md) ｜
 [Hive 4.0](TEST-REPORT-hive-live.md) ｜ [Spark 4.1.3](TEST-REPORT-spark-live.md) ｜
 [湖表格式 ×4（Iceberg/Delta/Hudi/Paimon）](TEST-REPORT-lakehouse-live.md) ｜
-[Doris（早于本轮）](TEST-REPORT-doris-live.md)。
+[Doris（本轮未验证）](TEST-REPORT-doris-unverified.md) ｜
+[StarRocks（本轮未验证）](TEST-REPORT-starrocks-unverified.md) ｜
+[Doris 历史记录（2026-09-13）](TEST-REPORT-doris-live.md)。
 
 ## 湖表格式（与执行引擎正交）
 

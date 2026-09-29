@@ -7,7 +7,15 @@
 | dialect | `postgres` |
 | 必填配置键 | `platform.command.run` |
 | 证据级别 | `local_receipt` |
-| 验证状态 | 未在真实 PostgreSQL/Greenplum 上联调 |
+| 验证状态 | **真跑通过（PostgreSQL 16，2026-09-28）**，见 docs/TEST-REPORT-postgres-live.md；Greenplum 未联调 |
+
+## 本地真跑记录（2026-09-28）
+
+- 起法：`docker run -d --name ddp-pg -e POSTGRES_PASSWORD=ddp -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=ods -p 55432:5432 postgres:16`。
+- 结果：`ddl render`（postgres 方言，含 `PARTITION BY RANGE` + 自动附带的 `DEFAULT` 分区 + `COMMENT ON`）真跑建表成功 →
+  写入三行 → 读回 **3 行 / 60.75** → 账本 → `evidence verify` → **P3 出口门 FAIL=0**。
+- 两条真跑教训：① 纯 `CREATE TABLE` 曾被第 9 条血缘规则误判（已修：只管 INSERT/CTAS）；
+  ② 有 `PARTITION BY RANGE` 却没建分区时写入报 `no partition of relation found`——模板现在附一个 `DEFAULT` 分区并出 WARN。
 
 ## 配置示例
 

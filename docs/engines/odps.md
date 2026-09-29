@@ -7,7 +7,24 @@
 | dialect | `odps` |
 | 必填配置键 | `platform.command.run` |
 | 证据级别 | `local_receipt` |
-| 验证状态 | 未在真实 MaxCompute 上联调 |
+| 验证状态 | **不可本地复现**（云服务，本机无法起真实实例）；本地可验的部分见下 |
+
+## 为什么"不可本地复现"，以及我们能验到哪一层
+
+MaxCompute/ODPS 是**云服务**：要有账号、项目空间与 AK/STS 才能连，本机离线起不出一个真实实例。
+这一条不写成含糊的"未验证"，而是分两层说清楚：
+
+| 层次 | 能不能在本机验 | 现在有什么 |
+| --- | --- | --- |
+| 建表模板（类型映射 / `PARTITIONED BY` / `STORED AS` / TBLPROPERTIES 语法） | **能**（渲染层） | `ddl render --dialect odps` 有单测；分区列只进 `PARTITIONED BY` 的规则与 Hive 共用（Hive 4.0 已真跑通过） |
+| 方言规则（行级写不支持、`INSERT OVERWRITE` 建议带分区） | **能**（规则层） | `dialect.odps.no_row_write` / `overwrite_without_partition` 有正反用例 |
+| 配置体检（kind/必填键/profiles/明文口令/kind×format） | **能**（配置层） | `platform doctor` 有单测（`--dialect` 显示 odps） |
+| 真跑建表/写入/读回/证据落账 | **不能** | 需要云账号 + 项目空间；`odpscmd` 的认证与退出码语义也未在本机验证 |
+
+要真正跑通这一步，需要：一个可用的 MaxCompute 项目、`odpscmd`（含 AK/STS 配置或已登录的 profile）、
+以及能访问 Endpoint 的网络。跑通后的验收标准与其它组件一致：
+`platform doctor` → `ddl render` → `platform run-sql --save-evidence` → 读回行数一致 →
+执行回执进账本 → `evidence verify` → P3 出口门 FAIL=0。
 
 ## 配置示例
 

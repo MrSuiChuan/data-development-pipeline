@@ -7,7 +7,17 @@
 | dialect | `clickhouse` |
 | 必填配置键 | `platform.command.run` |
 | 证据级别 | `local_receipt` |
-| 验证状态 | 未在真实 ClickHouse 上联调 |
+| 验证状态 | **真跑通过（ClickHouse 24.8.14.39，2026-09-29）**，见 docs/TEST-REPORT-clickhouse-live.md |
+
+## 本地真跑记录（2026-09-29）
+
+- 起法：`docker run -d --name ddp-ch -p 9000:9000 -p 8123:8123 -v <项目>:<项目> -e CLICKHOUSE_PASSWORD=ddp clickhouse/clickhouse-server:24.8`；
+  **先建项目目录再挂载**（反过来 Docker 会用 root 建挂载点，写 SQL 就 PermissionError）。
+- 客户端：宿主没装 `clickhouse-client`，argv 走容器内客户端 `docker exec -i -e CLICKHOUSE_PASSWORD=ddp ddp-ch clickhouse-client --multiquery --queries-file {file}`。
+- 结果：`ddl render` 的模板原样建表成功（`Int64`/`Decimal(18, 2)`/`Date` 三个物理类型被真引擎接受）→ 写入三行 →
+  读回 **3 行 / 60.75** → 账本 → `evidence verify` → **P3 出口门 FAIL=0**。
+- 规则背书：`UPDATE … FROM` 真报 `SYNTAX_ERROR`（退出码 62）；`ALTER … UPDATE` 立即返回且
+  `system.mutations` 待办 0（证实是"条件性 WARN"而不是语法错）。
 
 ## 配置示例
 
