@@ -232,16 +232,21 @@ def render_ddl(spec: Any, dialect: str, fmt_override: Optional[str] = None) -> D
         if comment:
             sql.append(f"COMMENT {_quote_string(comment)}")
         with_items = [(str(k), _quote_string(v)) for k, v in sorted(properties.items())]
-        # Trino 的 format 指文件格式；表格式（iceberg/hudi/delta）由 catalog/connector 决定
-        with_items.append(("format", _quote_string("PARQUET")))
-        if fmt != "none":
-            warnings.append(
-                f"Trino 的 {format_spec.label} 由 catalog 决定（connector={fmt}）："
-                "DDL 里的 format 只是文件格式，建表前先确认 catalog 指向"
-            )
         if partition:
             with_items.append(("partitioned_by", "ARRAY[" + ", ".join(_quote_string(p) for p in partition) + "]"))
-        sql.append("WITH (\n  " + ",\n  ".join(f"{k} = {v}" for k, v in with_items) + "\n)")
+            warnings.append(
+                "Trino 的 partitioned_by 是 connector 属性（Hive/Iceberg 认它，memory/JDBC 不认）："
+                "建表报 unknown property 就按目标 connector 的手册改"
+            )
+        if fmt != "none":
+            warnings.append(
+                f"Trino 的表格式由 catalog/connector 决定（connector={fmt}）："
+                "DDL 里不生成任何 format 属性——它是 Hive connector 的文件格式键，不是通用属性"
+            )
+        if with_items:
+            # 真实引擎教训：不要凭空补 format='PARQUET'，memory connector 直接报
+            # "Catalog 'memory' table property 'format' does not exist"。
+            sql.append("WITH (\n  " + ",\n  ".join(f"{k} = {v}" for k, v in with_items) + "\n)")
     elif dialect == "flink":
         head = f"CREATE TABLE IF NOT EXISTS {table} (\n{columns_sql}"
         if primary_key:

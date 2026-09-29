@@ -13,6 +13,13 @@
   两条方言规则得到真引擎背书：`UPDATE ... FROM` 真报 `SYNTAX_ERROR`（退出码 62）；
   `ALTER ... UPDATE` 立即返回且 `system.mutations` 待办 0（证实是条件性 WARN）。
   报告：[docs/TEST-REPORT-clickhouse-live.md](docs/TEST-REPORT-clickhouse-live.md)。
+- **Trino 476 真跑通过**（memory connector）：建表 → 写入 → 读回（3 行 / 60.75）→ 账本 →
+  `evidence verify` → **P3 出口门 FAIL=0**。真跑揪出并修掉模板缺陷：Trino 的 `WITH (...)` 键
+  **由 connector 定义**，模板原先凭空生成 `format = 'PARQUET'`，memory connector 直接报
+  `table property 'format' does not exist`；现在无 properties/partition 就不生成 `WITH`，
+  `partitioned_by` 会 WARN 提醒是 connector 属性。`INSERT OVERWRITE` 的真报错
+  （`mismatched input 'OVERWRITE'`）也让该 FAIL 规则有了真引擎依据。
+  报告：[docs/TEST-REPORT-trino-live.md](docs/TEST-REPORT-trino-live.md)。
 - 新增实验手册 [docs/engines/lab.md](docs/engines/lab.md)：一个组件一次、项目目录先建再挂载、
   项目放 Windows 文件系统（`/tmp` 会随 WSL 重启蒸发）、口令走环境变量、从 `DROP TABLE` 的干净起点开始。
 

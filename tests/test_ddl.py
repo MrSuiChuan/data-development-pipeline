@@ -118,8 +118,20 @@ class RenderTemplateTests(unittest.TestCase):
     def test_trino_uses_with_not_using(self) -> None:
         sql = ddl.render_ddl(SPEC, "trino")["sql"]
         self.assertNotIn("USING ", sql)
-        self.assertIn("format = 'PARQUET'", sql)
+        # 真实引擎教训：不要凭空生成 format（memory connector 会报 unknown property）
+        self.assertNotIn("format = ", sql)
         self.assertIn("partitioned_by = ARRAY['ds']", sql)
+
+    def test_trino_without_partition_or_properties_has_no_with_clause(self) -> None:
+        """memory/JDBC 这类 connector 不认 format/partitioned_by：没有可写属性时就不该出 WITH。"""
+        spec = {"table": "t", "columns": [{"name": "id", "type": "bigint"}]}
+        sql = ddl.render_ddl(spec, "trino")["sql"]
+        self.assertNotIn("WITH (", sql)
+        self.assertIn("CREATE TABLE IF NOT EXISTS t (", sql)
+
+    def test_trino_partition_warns_about_connector_specific_property(self) -> None:
+        result = ddl.render_ddl(SPEC, "trino")
+        self.assertTrue(any("partitioned_by" in w and "connector" in w for w in result["warnings"]))
 
     def test_flink_clause_order(self) -> None:
         sql = ddl.render_ddl(SPEC, "flink")["sql"]

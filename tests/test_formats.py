@@ -80,8 +80,10 @@ class FormatRenderTests(unittest.TestCase):
 
     def test_trino_explains_catalog_for_lakehouse(self) -> None:
         result = ddl.render_ddl(SPEC, "trino", fmt_override="iceberg")
-        self.assertIn("format = 'PARQUET'", result["sql"])
-        self.assertTrue(any("catalog" in w for w in result["warnings"]))
+        # 真跑教训：不要凭空生成 format（memory connector 报 unknown property）；
+        # Trino 的表格式由 catalog 决定，DDL 里只保留显式给的属性。
+        self.assertNotIn("format = ", result["sql"])
+        self.assertTrue(any("catalog" in w or "connector" in w for w in result["warnings"]))
 
     def test_render_carries_write_and_ops_guidance(self) -> None:
         for fmt in formats.FORMATS:
