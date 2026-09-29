@@ -91,3 +91,7 @@ mysql -h 127.0.0.1 -P 9030 -uroot -e "ALTER SYSTEM ADD BACKEND 'starrocks-be:804
 **当前进度（如实记录）**：FE 镜像的多层已陆续 `Download complete`（层会续传），
 但每一轮 15 分钟仍会在某个大层上超时；脚本自带 4 轮重试，失败会打印 `PULL_FAILED`。
 这一条仍是**未验证**——只把"怎么拉、拉到哪一步"写清楚。
+
+**顺带踩到的一个坑**：想"单流下载会不会更稳"时写成了 `docker pull --max-concurrent-downloads=1 …`，
+结果 12 轮全部 `rc=125`（usage error）——这个参数是 **dockerd 的配置项**（`/etc/docker/daemon.json`），
+**不是 `docker pull` 的 flag**。差点把"我的命令写错"当成"镜像拉不动"记进报告，写在这里免得下一个人重踩。
