@@ -106,3 +106,24 @@ mysql -h 127.0.0.1 -P 9030 -uroot -e "ALTER SYSTEM ADD BACKEND 'starrocks-be:804
 
 即：**GitHub 上没有 StarRocks 的发行包**（官方只放在 releases.starrocks.io，本机 403）。
 镜像仍是唯一可行来源——它确实存在（三个镜像源 manifest OK），瓶颈只是大层下载的稳定性。
+
+### 把"开源 ≠ GitHub 上有二进制"钉死（用户追问后复测，2026-09-30 第二轮）
+
+用户追问："doris 和 starrocks 不都是开源的组件吗，github 上拿不到吗"。分开核源码与产物（只读探测）：
+
+| 试法 | 结果 |
+| --- | --- |
+| `api.github.com/repos/StarRocks/starrocks` | **200**：仓库在，`license.spdx_id = Apache-2.0`，源码约 841 MB，12k stars |
+| `…/git/ref/tags/3.5.21` | **200**：tag 在 |
+| Releases API（3.5.21 / 4.0.14 / 3.5.20 / 4.0.13 / 4.1.3） | 每个 release **`assets=0`**：没有二进制 |
+| 官方二进制 CDN `releases.starrocks.io/starrocks/StarRocks-{3.5.21,3.3.9}.tar.gz` | **403**（根目录也是 403） |
+| Apache CDN `dlcdn.apache.org/starrocks/…` 与 `downloads.apache.org/starrocks/…` | **404**（StarRocks 不在 Apache 名下） |
+| 源码包（`main` 分支 tarball 走 `gh-proxy.com`） | **200**，25 秒收到 23.9 MB（流式，可拿） |
+| 构建依赖 CDN `cdn-thirdparty.starrocks.com/…` | **206**（构建原料可达） |
+
+结论：StarRocks 与 Doris 同型——**源码在 GitHub（可取）、发行包不在 GitHub**（官方 CDN 对本网络 403）。
+它比 Doris 更窄：官方二进制 403 + Apache CDN 没有 + GitHub Releases 空 + ghcr 没有，
+**镜像仍是唯一可用的二进制来源**，而镜像大层下载的稳定性是本轮的瓶颈（见上文）。
+源码构建这条路的前提（`build.sh` / `build-in-docker.sh` / `thirdparty/vars*.sh`）都在仓库里，
+但 `build-in-docker.sh` 依赖 Docker Hub（不可达），本地直构需要 C++ 工具链与 JDK——
+与 Doris 一样属于"要用户拍板才动"的路径，本轮该目标（组件真跑矩阵）已按要求暂停。

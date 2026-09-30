@@ -40,3 +40,8 @@ The Chinese docs are authoritative; this page is a summary.
 - [SECURITY.md](SECURITY.md) — security model and **known limits** (read this one)
 - [CONTRIBUTING.md](CONTRIBUTING.md) — dev loop and the checks CI enforces
 - [CHANGELOG.md](CHANGELOG.md)
+
+## License
+
+Apache License 2.0 (`SPDX: Apache-2.0`) — full text in [LICENSE](LICENSE);
+attribution and third-party boundaries in [NOTICE](NOTICE).

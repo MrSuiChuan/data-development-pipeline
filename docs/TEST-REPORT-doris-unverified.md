@@ -53,6 +53,45 @@
 即：**GitHub 也没有 Doris 的二进制**（它的发行包只放在官方 OSS 桶）。第三方转载仓库不去搜——
 那是来源不明的再分发，供应链风险大于收益。
 
+### 把"开源 ≠ GitHub 上有二进制"钉死（用户追问后复测，2026-09-30 第二轮）
+
+用户追问："doris 和 starrocks 不都是开源的组件吗，github 上拿不到吗"。**开源说的是源码**，与
+"GitHub 上有能直接跑的产物"是两件事，分开核（全是只读探测，未下载整包）：
+
+| 试法 | 结果 |
+| --- | --- |
+| `api.github.com/repos/apache/doris` | **200**：仓库在，`license.spdx_id = Apache-2.0`，源码约 1.42 GB，16k stars |
+| `…/git/ref/tags/4.0.8` | **200**：tag 在 |
+| Releases API（4.1.4.1 / 4.1.4 / 4.0.8 / 4.1.3 / 4.0.7） | 每个 release **`assets=0`**：只有 GitHub 自动生成的源码包，**没有二进制** |
+| 源码包 `codeload.github.com/apache/doris/tar.gz/refs/tags/4.0.8` | 直连 `000`（本网络对 github.com/codeload **时通时断**）；走 `gh-proxy.com` **200**，20 秒收到 10.9 MB（在流式下载，只是慢） |
+| Apache CDN（`dlcdn.apache.org/doris/4.0/4.0.8/`、`…/3.1/3.1.4/`） | 目录里只有 `apache-doris-<ver>-src.tar.gz`（**独立复现**了第 2 节"官方镜像也只有源码包"的结论） |
+
+结论：GitHub 上有 Doris 的**源码**，没有 Doris 的**发行包**（发行包只放官方 OSS 桶与 Docker Hub）。
+
+### 顺带查清："从源码构建"是不是一条真路（2026-09-30 第二轮）
+
+源码能取，那就得答一句"那能不能自己构建"。先核它的前提（同样没下整包）：
+
+| 项 | 结果 |
+| --- | --- |
+| 构建入口 | 仓库根有 `build.sh` + `thirdparty/`（内含 `build-thirdparty.sh`、`download-prebuild-thirdparty.sh`、`vars.sh`），API 均 200 |
+| 预编译 thirdparty 的来源 | `thirdparty/download-prebuild-thirdparty.sh` 里写死 `https://github.com/apache/doris-thirdparty/releases/download/automation/doris-thirdparty-prebuilt-linux-x86_64.tar.xz` |
+| 这个包多大 | **685,559,216 B（≈654 MiB）** |
+| 这个包可达吗 | 直连 **206**（本轮 github.com 直连是通的）；走 gh-proxy **200**，25 秒收到 62.9 MB（≈2.5 MB/s，整包约 4–5 分钟） |
+| 同 tag 的其他资产 | `…-linux-aarch64` / `…-darwin-arm64` / `…-darwin-x86_64` 的 tar.xz、`doris-thirdparty-source.tgz`、`hadoop-3.4.1-jar-dependency-x86.tar.gz` |
+
+所以"GitHub 上拿不到"只对**可直接运行的产物**成立：Doris 的源码与**构建原料**都在 GitHub 上，
+本轮实测都能拿到。真正拦住"今天就把 Doris 跑起来"的是构建本身：
+
+- 构建代价**未实测**，只看得到下界——源码仓库 1.42 GB、预编译依赖 654 MiB，BE 是 C++ 编译（要用官方
+  单独的构建向导），本机 8 GB 内存与 WSL 磁盘余量得先算；本轮不把它当"能立刻跑通"的路径；
+- Docker Hub 仍不可达：`registry-1.docker.io` 与 `auth.docker.io` 本轮都超时（匿名 token 取不到），
+  镜像源 `docker.m.daocloud.io` / `registry.cn-hangzhou.aliyuncs.com` 的 `/v2/` 是 401（源在，但
+  `apache/doris` 命名空间 denied）。
+
+即：**Doris 现在最便宜的路是源码构建（约 4–5 分钟能下完构建原料，再花几十分钟到数小时编译）**，
+不是等镜像。要不要走这条路由用户拍板——它属于"组件真跑矩阵"的范畴，本轮该目标已按用户要求暂停。
+
 ## 这一项**没有**证明什么（避免被读成结论）
 
 - 没有证明 Doris 与当前代码不兼容（本轮没跑起来过）；

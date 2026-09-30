@@ -147,21 +147,24 @@ class VersionConsistencyTests(unittest.TestCase):
                 suffix.startswith("codex."), f"未知版本后缀：{suffix}（用 tools/reinstall.py 生成）"
             )
 
-    def test_author_name_agrees_across_license_and_manifests(self) -> None:
+    def test_author_name_agrees_across_notice_and_manifests(self) -> None:
         """署名三处必须一致，而且不留空 email。
+
+        Apache-2.0 的惯例是 LICENSE 只放官方全文（不含 Copyright 行），归属写在 NOTICE，
+        所以 Copyright 行从 NOTICE 读——换许可时别把这条判据留在 LICENSE 上。
 
         原来 LICENSE 写 AI实战技能圈、两个清单写 data-development-plugin maintainers，
         而 SECURITY.md 让人"联系 marketplace 元数据里的邮箱"——那个字段是空字符串。
         文档指向一个不存在的东西，比没有指引更糟。
         """
-        license_text = (ROOT_REPO / "LICENSE").read_text(encoding="utf-8")
-        match = re.search(r"Copyright \(c\) \d{4} (.+)", license_text)
-        self.assertIsNotNone(match, "LICENSE 里找不到 Copyright 行")
+        notice_text = (ROOT_REPO / "NOTICE").read_text(encoding="utf-8")
+        match = re.search(r"Copyright \(c\) \d{4} (.+)", notice_text)
+        self.assertIsNotNone(match, "NOTICE 里找不到 Copyright 行")
         owner = match.group(1).strip()
         for rel in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
             data = json.loads((ROOT_REPO / rel).read_text(encoding="utf-8"))
             author = data.get("author") or {}
-            self.assertEqual(author.get("name"), owner, f"{rel} 的署名与 LICENSE 不一致")
+            self.assertEqual(author.get("name"), owner, f"{rel} 的署名与 NOTICE 不一致")
             email = author.get("email")
             if email is not None:
                 self.assertTrue(

@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Changed（许可证：MIT → Apache-2.0）
+
+用户要求把许可换成 Apache-2.0。这不是换个文件就完事：Apache-2.0 的惯例是 `LICENSE` 只放官方全文
+（**不含** Copyright 行），归属信息写在 `NOTICE`。
+
+- `LICENSE` 换成 Apache-2.0 官方全文（与 `https://www.apache.org/licenses/LICENSE-2.0.txt` 一致）；
+- `NOTICE` 改成 Apache 风格：`Copyright (c) 2026 AI实战技能圈` + 许可类型 + "分发随带 NOTICE"
+  （第 4(d) 条），四条分发边界原样保留；
+- 两个 `plugin.json` 的 `license` 从 `MIT` 改成 `Apache-2.0`（`.codex-plugin` 是生成物，改源后重跑
+  `tools/build_codex_surface.py`）；
+- 机器校验跟着改：`test_oss_readiness` 不再认 LICENSE 首行（Apache 全文首行是空行），改按 SPDX 标识认
+  正文，并检查 `NOTICE` 写了同一个标识；`test_repo_invariants` 的署名核对从 LICENSE 移到 NOTICE；
+- `README.md` / `README.en.md` / `CONTRIBUTING.md` 的许可段同步改。
+
+对使用者可见的差别：Apache-2.0 比 MIT 多一条**专利授权**与**商标限制**，并要求分发时保留 `NOTICE`；
+使用方式不变。
+
 ### Added（组件真跑矩阵：逐个本地起、逐个真跑）
 
 上一轮把兼容能力做成了代码与单测，但验证矩阵里只有 PostgreSQL 与 MySQL 是真跑通过。

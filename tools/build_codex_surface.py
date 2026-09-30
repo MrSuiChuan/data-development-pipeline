@@ -168,7 +168,7 @@ def build_codex_manifest() -> None:
             "+ Hook 硬门控，强制按顺序交付机器证据。任务单/数据平台/质量/知识库均为可配置连接器。"
         ),
         "author": {"name": PLUGIN_AUTHOR},
-        "license": "MIT",
+        "license": "Apache-2.0",
         "keywords": [
             "data-development",
             "pipeline",

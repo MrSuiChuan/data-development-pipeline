@@ -4,7 +4,8 @@
 所以这里不新增一个 validate_plugin 脚本，而是把开源就绪的判据放进用例：
 
 1. 社区/治理/发布文件齐全（缺哪个直接点名）；
-2. LICENSE 与两个 plugin.json 的 license 字段一致；
+2. LICENSE 的许可类型（按 SPDX 认正文，不认首行）与两个 plugin.json 的 license 字段、
+   NOTICE 里写的许可类型一致；
 3. 本机运行时产物（metastore_db / derby.log / spark-warehouse）没有进仓库、也在 .gitignore 里；
 4. 面向用户的文档不写死测试数量（曾经 README 写"120 个单测"，实际 246——文档自相矛盾）；
 5. README 的文档索引指向新增的社区文件（友好性：新人不该翻不到求助入口）。
@@ -76,16 +77,26 @@ class OssReadinessTests(unittest.TestCase):
             self.assertTrue(missing_elsewhere, "判据写错了：空目录竟然不缺文件")
 
     def test_license_matches_manifests(self) -> None:
-        license_line = (ROOT / "LICENSE").read_text(encoding="utf-8").splitlines()[0].strip()
-        kind = "MIT" if "MIT" in license_line else ("Apache" if "Apache" in license_line else license_line)
+        # 判据按 SPDX 标识认正文，不读首行：Apache-2.0 官方全文的第一行是空行。
+        text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+        if "Apache License" in text and "Version 2.0" in text:
+            spdx = "Apache-2.0"
+        elif "MIT License" in text:
+            spdx = "MIT"
+        else:
+            self.fail("LICENSE 认不出许可类型（既不像 Apache-2.0 也不像 MIT）")
         for manifest in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
-            text = (ROOT / manifest).read_text(encoding="utf-8")
-            declared = re.search(r'"license"\s*:\s*"([^"]+)"', text)
+            declared = re.search(
+                r'"license"\s*:\s*"([^"]+)"', (ROOT / manifest).read_text(encoding="utf-8")
+            )
             self.assertIsNotNone(declared, f"{manifest} 缺 license 字段")
             self.assertEqual(
-                declared.group(1).strip(), kind,
-                f"{manifest} 写 {declared.group(1)}，LICENSE 是 {license_line}",
+                declared.group(1).strip(), spdx,
+                f"{manifest} 写 {declared.group(1)}，LICENSE 是 {spdx}",
             )
+        # Apache-2.0 第 4(d) 条：分发时 NOTICE 要随包保留，所以它也得说清是哪个许可。
+        notice = (ROOT / "NOTICE").read_text(encoding="utf-8")
+        self.assertIn(spdx, notice, "NOTICE 没写许可类型（分发要随带，见 Apache-2.0 第 4(d) 条）")
 
     def test_runtime_junk_is_not_tracked_and_is_ignored(self) -> None:
         tracked = _git_ls_files(ROOT)

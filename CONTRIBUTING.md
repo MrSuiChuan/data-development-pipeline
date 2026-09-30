@@ -42,9 +42,9 @@ claude plugin validate .
 
 ## License
 
-MIT — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache-2.0 (`SPDX: Apache-2.0`) — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-**Inbound = outbound**：你提交的贡献以同一许可证（MIT）授权给本项目，
+**Inbound = outbound**：你提交的贡献以同一许可证（Apache-2.0）授权给本项目，
 与 Apache 项目的惯例一致；提交即表示你同意这一点，并声明这些代码是你有权提交的。
 
 **DCO 签署**：每个提交的说明里请带一行

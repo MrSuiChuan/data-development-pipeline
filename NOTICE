@@ -5,7 +5,8 @@ Copyright (c) 2026 AI实战技能圈
 
 许可证
 ------
-本仓库以 MIT 许可证发布，全文见 LICENSE。
+本仓库以 Apache License 2.0 发布，全文见 LICENSE。
+按 Apache-2.0 第 4(d) 条，本文件随源码与发布物一并保留；分发衍生作品时请一并携带。
 贡献者提交代码即表示同意以同一许可证授权（inbound = outbound），详见 CONTRIBUTING.md。
 
 第三方依赖与分发边界

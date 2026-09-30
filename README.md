@@ -325,4 +325,5 @@ SessionStart 提示。
 
 ## License
 
-MIT
+Apache License 2.0（`SPDX: Apache-2.0`）—— 全文见 [LICENSE](LICENSE)；
+归属与第三方依赖边界见 [NOTICE](NOTICE)。
