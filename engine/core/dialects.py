@@ -150,12 +150,14 @@ RULES: Tuple[DialectRule, ...] = (
     _r(id="dialect.doris.row_write_needs_key_model", dialect="doris",
        pattern=r"\b(UPDATE|DELETE)\b",
        severity=WARN, rule=3,
-       message="Doris 的 UPDATE/DELETE 只支持主键/唯一模型，聚合与明细模型不支持",
+       message="Doris 的 UPDATE/DELETE 只支持主键/唯一模型，聚合与明细模型不支持"
+               "（实测：UNIQUE KEY 表 UPDATE 成功；DUPLICATE KEY 表报 Only unique table could be updated）",
        repair="确认表模型；否则整分区 INSERT OVERWRITE 重写"),
     _r(id="dialect.starrocks.row_write_needs_key_model", dialect="starrocks",
        pattern=r"\b(UPDATE|DELETE)\b",
        severity=WARN, rule=3,
-       message="StarRocks 的 UPDATE/DELETE 只支持主键模型（明细/聚合模型不支持）",
+       message="StarRocks 的 UPDATE 需要主键模型：UNIQUE KEY 表实测不支持 UPDATE"
+               "（table does not support update），DELETE 在唯一/主键模型上可用，明细/聚合模型都不行",
        repair="确认表模型；否则整分区 INSERT OVERWRITE 重写"),
 )
 

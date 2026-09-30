@@ -329,8 +329,15 @@ def render_ddl(spec: Any, dialect: str, fmt_override: Optional[str] = None) -> D
             sql.append(f"COMMENT {_quote_string(comment)}")
         if dialect in ("doris", "starrocks"):
             key = primary_key or [c.get("name") for c in columns if isinstance(c, dict)][:1]
-            sql.append(f"DISTRIBUTED BY HASH({', '.join(str(k) for k in key)}) BUCKETS AUTO")
-            warnings.append("分布键/分桶数只是最小可用形态（BUCKETS AUTO）：按集群实际数据量确认")
+            distributed = f"DISTRIBUTED BY HASH({', '.join(str(k) for k in key)})"
+            if dialect == "doris":
+                sql.append(f"{distributed} BUCKETS AUTO")
+                warnings.append("分布键/分桶数只是最小可用形态（BUCKETS AUTO）：按集群实际数据量确认")
+            else:
+                # 真引擎实测（StarRocks 3.3.9）：BUCKETS AUTO 是 Doris 的写法，StarRocks 会语法错
+                # （Unexpected input 'AUTO'，最接近的输入是 INTEGER_VALUE）；省略 BUCKETS 时它自己分桶。
+                sql.append(distributed)
+                warnings.append("StarRocks 不写 BUCKETS：省略后由引擎自动分桶（3.3.9 实测可用）；要固定分桶数请手工补 BUCKETS n")
             if partition:
                 warnings.append("Doris/StarRocks 的分区子句未自动生成（分区类型与取值范围要按业务定），spec.partition_by 仅供人工参考")
             if properties:

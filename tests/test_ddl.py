@@ -133,6 +133,18 @@ class RenderTemplateTests(unittest.TestCase):
             "给了副本配置就不该再提示",
         )
 
+    def test_buckets_clause_splits_doris_from_starrocks(self) -> None:
+        """真引擎教训：`BUCKETS AUTO` 是 Doris 的写法。
+
+        StarRocks 3.3.9 实测报 `Unexpected input 'AUTO'…最接近的是 INTEGER_VALUE`；
+        省略 BUCKETS 时 StarRocks 自己分桶（同一轮实测可用）。两家不能共用一句。
+        """
+        doris_sql = ddl.render_ddl(SPEC, "doris")["sql"]
+        starrocks_sql = ddl.render_ddl(SPEC, "starrocks")["sql"]
+        self.assertIn("DISTRIBUTED BY HASH(user_id) BUCKETS AUTO", doris_sql)
+        self.assertIn("DISTRIBUTED BY HASH(user_id)", starrocks_sql)
+        self.assertNotIn("BUCKETS AUTO", starrocks_sql, "StarRocks 不接受 BUCKETS AUTO（真引擎语法错）")
+
     def test_mysql_has_no_properties_clause(self) -> None:
         parts = ddl.render_ddl(SPEC, "mysql")
         self.assertNotIn("PROPERTIES", parts["sql"])

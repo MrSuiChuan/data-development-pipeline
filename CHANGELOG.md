@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+### Added（StarRocks 真跑通过：官方 FE/BE 镜像，WSL-002）
+
+矩阵里 starrocks 那行也从"本轮未验证"变成"真跑通过"。上一轮卡在"镜像层下载反复超时"，
+这一轮两个镜像（FE 1.97 GB / BE 3.03 GB）已经在本地，用的是**容器保活 + exec 起进程**的正确姿势：
+
+- 两个镜像的默认 `Cmd` 都是 `/bin/bash`，`docker run -d` 会立刻退出（上一轮就是这么误判成"起不来"）；
+- FE 默认堆 8192m，本机必须压到 2048m；BE 起来先 `/api/health`，再 `ALTER SYSTEM ADD BACKEND`；
+- 链路跑通：`doctor → ddl render → 建表 → 写入 → 读回 3 行 / 60.75 → 账本 → evidence verify →
+  **P3 出口门 FAIL=0**；
+- 报告：[docs/TEST-REPORT-starrocks-live.md](docs/TEST-REPORT-starrocks-live.md)；
+  接入页：[docs/engines/starrocks.md](docs/engines/starrocks.md)。
+
+### Fixed（StarRocks 真跑揪出的两处：BUCKETS AUTO 与 UPDATE 的表模型）
+
+1. **`BUCKETS AUTO` 是 Doris 的写法**——StarRocks 3.3.9 直接语法错
+   （`Unexpected input 'AUTO'，最接近的输入是 INTEGER_VALUE`）。同一实例上三种写法的实测：
+   `BUCKETS AUTO` ❌、`BUCKETS 1` ✅、省略 BUCKETS ✅。修正后 Doris 保留 `BUCKETS AUTO`，
+   StarRocks 不写 BUCKETS（交回引擎自动分桶），用例
+   `tests/test_ddl.py::test_buckets_clause_splits_doris_from_starrocks`。
+2. **StarRocks 的 UPDATE 要主键模型**：模板默认生成 `UNIQUE KEY`，而 StarRocks 的 UNIQUE KEY 表
+   实测 `UPDATE` 报 `table does not support update`（`DELETE` 可以）；手工建 `PRIMARY KEY` 表则
+   `UPDATE`/`DELETE` 都成功。`dialect.starrocks.row_write_needs_key_model` 的文案按实测改精确，
+   没有把它升格成"包治"。
+
+顺带留证一条弯路：用 `kind=command` + `engine=mysql` 跑 StarRocks 时 `doctor` 报 `dialect=mysql`，
+渲染出列内 `PRIMARY KEY` + `ENGINE = InnoDB`，真引擎报 `No viable statement for input ', PRIMARY'`——
+要 StarRocks 方言就用 `kind=starrocks`（已写进接入页与报告）。
+
 ### Added（Doris 真跑通过：官方二进制原生 FE+BE，WSL-001）
 
 矩阵里 Doris 那行从"本轮未验证"变成"真跑通过"。上一轮卡住的原因不是网络拿不到包，而是**在猜对象名**：
