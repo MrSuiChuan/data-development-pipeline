@@ -127,3 +127,19 @@ mysql -h 127.0.0.1 -P 9030 -uroot -e "ALTER SYSTEM ADD BACKEND 'starrocks-be:804
 源码构建这条路的前提（`build.sh` / `build-in-docker.sh` / `thirdparty/vars*.sh`）都在仓库里，
 但 `build-in-docker.sh` 依赖 Docker Hub（不可达），本地直构需要 C++ 工具链与 JDK——
 与 Doris 一样属于"要用户拍板才动"的路径，本轮该目标（组件真跑矩阵）已按要求暂停。
+
+### 第三轮复测：官方直链这条路也走不通（2026-09-30）
+
+既然 Doris 那边已经用"从官方下载页取真实地址"的办法解了阻塞（见
+`docs/TEST-REPORT-doris-unverified.md` 的「阻塞解除」小节），对 StarRocks 用同一招：
+
+| 试法 | 结果 |
+| --- | --- |
+| 官方二进制 CDN `releases.starrocks.io`（`starrocks/StarRocks-3.5.21.tar.gz`、`…-3.3.9…`、`starrocks/3.5.21/…`、根路径，带浏览器 UA） | **全部 403**——不是路径错，是这一层对本网络直接拒答 |
+| 官方下载页 `https://www.starrocks.io/download/community` | **200**，但页面是 JS 渲染（57 KB HTML 里没有任何 `.tar.gz` 或 releases 域名），抓不到直链 |
+| 官方文档 `https://docs.starrocks.io/docs/deployment/deploy_manually/` | **200**，同样抓不到直链（95 KB HTML 里没有 `.tar.gz`） |
+| Apache CDN（`dlcdn` / `downloads.apache.org/starrocks/`） | **404**（StarRocks 不在 Apache 名下） |
+
+→ 与 Doris 的对照正好是一句话：**Doris 的官方二进制实测可达，StarRocks 的不可达**。
+StarRocks 的阻塞仍然成立，且原因收窄为"官方 CDN 403 + 官网不给直链"；
+镜像仍是唯一来源（三个镜像源 manifest 都能取到，瓶颈是大层下载的稳定性）。
