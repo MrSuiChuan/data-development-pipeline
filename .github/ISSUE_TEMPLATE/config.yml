@@ -1,0 +1,12 @@
+# 让"提问前自查"出现在 issue 入口：比任何模板都省事。
+blank_issues_enabled: false
+contact_links:
+  - name: 参与方式与行为规范
+    url: https://github.com/MrSuiChuan/data-development-plugin/blob/main/CONTRIBUTING.md
+    about: 提交 PR 前先看这里（含 DCO 与测试要求）。
+  - name: 安全漏洞
+    url: https://github.com/MrSuiChuan/data-development-plugin/blob/main/SECURITY.md
+    about: 安全问题不要开公开 issue，按 SECURITY.md 的渠道报告。
+  - name: 求助与自查
+    url: https://github.com/MrSuiChuan/data-development-plugin/blob/main/SUPPORT.md
+    about: 提问前跑一遍 SUPPORT.md 里的三条自查命令，并把输出贴进 issue。

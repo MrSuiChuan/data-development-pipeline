@@ -1,0 +1,22 @@
+data-development-plugin
+Copyright (c) 2026 AI实战技能圈
+
+本产品包含由 data-development-plugin 项目开发的软件。
+
+许可证
+------
+本仓库以 MIT 许可证发布，全文见 LICENSE。
+贡献者提交代码即表示同意以同一许可证授权（inbound = outbound），详见 CONTRIBUTING.md。
+
+第三方依赖与分发边界
+--------------------
+1. **运行时不依赖任何第三方 Python 包**：引擎、hook、校验器与工具只用 Python 标准库
+   （`tests/` 需要 pytest，仅开发期使用，不随发布物分发）。
+2. **不随包分发任何大数据组件**：插件面向 Flink / Paimon / Fluss / Hive / Spark / Trino /
+   ClickHouse / PostgreSQL / MySQL / Doris / StarRocks 等组件工作，但这些组件**不由本包提供**，
+   其许可证与使用条款由使用者在自己的环境里遵守。
+3. **仓库里不含平台专有名**：平台命令名、MCP 服务名、内部代号一律通过项目级配置
+   （`.data-dev/config.json`）注入，仓库内不携带；脱敏扫描是仓库的硬红线
+   （见 `tools/desensitize_terms.example.txt` 与 `tools/validate_plugin.py` 第 7 项）。
+4. **本地联调留下的第三方元数据不入库**：真跑联调时 Spark/Doris 等组件会在工作目录生成
+   运行时文件（如 `metastore_db/`、`derby.log`），这些属于本机产物，已在 `.gitignore` 中排除。

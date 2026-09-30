@@ -1,0 +1,15 @@
+# 默认负责人：所有改动先由这里的人评审。
+*       @MrSuiChuan
+
+# 治理与法律相关文件：改动需要仓库所有者明确同意（见 GOVERNANCE.md「需要显式同意的改动」）。
+/LICENSE                @MrSuiChuan
+/NOTICE                 @MrSuiChuan
+/GOVERNANCE.md          @MrSuiChuan
+/CODE_OF_CONDUCT.md     @MrSuiChuan
+/SECURITY.md            @MrSuiChuan
+/RELEASE.md             @MrSuiChuan
+
+# 门控与引擎：改这里等于改行为，评审时对照 tests/ 与 docs/validation-report.md。
+/engine/                @MrSuiChuan
+/hooks/                 @MrSuiChuan
+/evals/                 @MrSuiChuan

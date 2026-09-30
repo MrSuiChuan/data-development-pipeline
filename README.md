@@ -10,6 +10,23 @@ Claude Code 插件：AI 在门内自主干活，但门的开关完全由机器�
 > JSON stdout 契约的自定义 CLI。
 > 三层防线：命令编排（流程剧本）→ 状态机（机器可判）→ Hook 硬门（机器不可绕）。
 
+## 30 秒上手（不碰任何真实系统）
+
+```bash
+git clone <本仓库> && cd data-development-plugin
+python engine/ddp.py demo --root /tmp/ddp-demo   # mock 模式跑通 建单→SDS→P2…P6 闭环
+python -m unittest discover -s tests             # 全量用例（数量以实际输出为准）
+python tools/adapt_hooks.py --check              # 非 Windows：hook 启动器必须切成本机 python3
+```
+
+三条路径，按需要选：
+
+| 你现在想做什么 | 走哪条 |
+| --- | --- |
+| 只想看看它是什么、流程长什么样 | 上面三行，`demo` 就跑完了整条流水线 |
+| 在自己项目里真用（工具链还没接） | 「快速开始」第 0-2 步 + `/setup`，先跑 mock，再按 `rtd-env` 的报告逐个补执行器 |
+| 接真实平台或开源引擎 | [docs/engines/README.md](docs/engines/README.md) 选引擎 → 填 `.data-dev/config.json` → `platform doctor` 体检 |
+
 ## 核心设计
 
 ```
@@ -60,7 +77,7 @@ hooks/                       hooks.json（Claude Code）+ claude-codex-hooks.jso
 workflows/                   phase4-test.js / phase5-deploy.js（schema 强制 query_id / 并行 dqc+回刷）
 engine/                      vendor-neutral 核心：ddp.py CLI + core/{context,state,validators,gates,clients,spec}.py
                              templates/CLAUDE.ddp.md、templates/AGENTS.ddp.md、templates/settings.json（setup 注入）
-tests/                       120 个单测/端到端（unittest，无宿主依赖）
+tests/                       单测/端到端（unittest，无宿主依赖；数量以 discover 实际输出为准）
 tools/wrap_marketplace.py    包装成可安装的 marketplace 仓库
 tools/build_codex_surface.py 从 Claude 源生成 Codex 面（清单/hooks/入口技能/AGENTS 规范）
 ```
@@ -144,7 +161,8 @@ python3 tools/adapt_hooks.py --check  # 体检：启动器不在 PATH 上就返�
 python engine/ddp.py demo --root /tmp/ddp-demo
 python engine/ddp.py demo --root /tmp/ddp-demo --autopilot
 
-# 单测（120 个：门禁阻断/放行、状态机、SDS 八规则、SQL 17 项、hook 冒烟、宿主 payload、路径归一化、端到端）
+# 单测（门禁阻断/放行、状态机、SDS 八规则、SQL 17 项、hook 冒烟、宿主 payload、路径归一化、
+#       多引擎注册表与方言规则、类型映射与 DDL、湖表格式、端到端；数量以实际输出为准）
 python -m unittest discover -s tests
 ```
 
@@ -292,6 +310,18 @@ SessionStart 提示。
 - [docs/REPRODUCTION-NOTES.md](docs/REPRODUCTION-NOTES.md)：连接器契约 + 已知边界与局限。
 - [docs/engines/README.md](docs/engines/README.md)：引擎接入矩阵（family/dialect/必填键/证据级别/验证状态）
   与逐引擎 playbook（Hive、Spark、ClickHouse、Trino、PostgreSQL、MaxCompute）。
+
+## 遇到 X 看哪个文件
+
+| 你想知道的 | 看这个 |
+| --- | --- |
+| 怎么参与、怎么跑测试、DCO 怎么签 | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| 谁能合并 / 谁能发版 / 冲突怎么裁决 | [GOVERNANCE.md](GOVERNANCE.md) |
+| 怎么切一个发布（版本单源 → 门禁 → tag） | [RELEASE.md](RELEASE.md) |
+| 装不上 / 门控行为不对 / 该去哪问 | [SUPPORT.md](SUPPORT.md) |
+| 怎么相处、遇到骚扰找谁 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
+| 安全漏洞（**不要开公开 issue**） | [SECURITY.md](SECURITY.md) |
+| 许可与第三方依赖边界 | [LICENSE](LICENSE)、[NOTICE](NOTICE) |
 
 ## License
 

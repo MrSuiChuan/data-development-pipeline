@@ -95,3 +95,14 @@ mysql -h 127.0.0.1 -P 9030 -uroot -e "ALTER SYSTEM ADD BACKEND 'starrocks-be:804
 **顺带踩到的一个坑**：想"单流下载会不会更稳"时写成了 `docker pull --max-concurrent-downloads=1 …`，
 结果 12 轮全部 `rc=125`（usage error）——这个参数是 **dockerd 的配置项**（`/etc/docker/daemon.json`），
 **不是 `docker pull` 的 flag**。差点把"我的命令写错"当成"镜像拉不动"记进报告，写在这里免得下一个人重踩。
+
+### GitHub 路线（用户提示"下载不了就从 GitHub 下"后补测，2026-09-30）
+
+| 试法 | 结果 |
+| --- | --- |
+| `ghcr.io/starrocks/allin1-ubuntu:3.3.9`、`ghcr.io/starrocks/{fe,be}-ubuntu:3.3.9` | MISS（ghcr 上没有） |
+| `gh-proxy.com` 代理 `github.com/StarRocks/starrocks/releases/download/3.3.9/StarRocks-3.3.9.tar.gz` | **404**；同一代理取 `raw.githubusercontent.com` 是 200（代理可用） |
+| GitHub Releases API | `StarRocks/starrocks` 各 release **资产数为 0**（3.5.21 / 4.0.14 / 3.5.20） |
+
+即：**GitHub 上没有 StarRocks 的发行包**（官方只放在 releases.starrocks.io，本机 403）。
+镜像仍是唯一可行来源——它确实存在（三个镜像源 manifest OK），瓶颈只是大层下载的稳定性。

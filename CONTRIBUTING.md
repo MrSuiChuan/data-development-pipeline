@@ -42,9 +42,32 @@ claude plugin validate .
 
 ## License
 
-MIT — see LICENSE.
+MIT — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+**Inbound = outbound**：你提交的贡献以同一许可证（MIT）授权给本项目，
+与 Apache 项目的惯例一致；提交即表示你同意这一点，并声明这些代码是你有权提交的。
+
+**DCO 签署**：每个提交的说明里请带一行
+
+```
+Signed-off-by: Your Name <you@example.com>
+```
+
+（`git commit -s` 会自动加上）。私有环境下不强制，但**公开协作时没有这行的 PR 会被要求补签**。
+
+## Community files
+
+| 你想知道的 | 看这个文件 |
+| --- | --- |
+| 谁能合并、谁能发版、冲突怎么裁决 | [GOVERNANCE.md](GOVERNANCE.md) |
+| 发布清单（版本单源 → 门禁 → tag） | [RELEASE.md](RELEASE.md) |
+| 怎么相处、遇到骚扰找谁 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
+| 提问前自查什么、问题该去哪 | [SUPPORT.md](SUPPORT.md) |
+| 安全漏洞怎么报（**不要开公开 issue**） | [SECURITY.md](SECURITY.md) |
 
 ## Releasing
+
+完整清单见 [RELEASE.md](RELEASE.md)；下面是本地几步的要点：
 
 1. Bump the base version in `.claude-plugin/plugin.json` (the only place it is
    written by hand) and add a matching, non-`[Unreleased]` section at the top of

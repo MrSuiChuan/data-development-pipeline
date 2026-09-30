@@ -42,6 +42,17 @@
 结论不变：**未验证**，但原因收敛成一句话——**Doris 的发行包在这个网络里拿不到**（不是装不了，
 也不是插件不兼容）。下面第 3 节的命令序列在有网的环境里可以直接照抄。
 
+### GitHub 路线（用户提示"下载不了就从 GitHub 下"后补测，2026-09-30）
+
+| 试法 | 结果 |
+| --- | --- |
+| `ghcr.io/apache/doris:*` 镜像 | MISS（该命名空间下没有） |
+| `gh-proxy.com` 代理 `github.com/apache/doris/releases/download/3.1.4/…` | **404**，而同一代理取 `raw.githubusercontent.com` 是 200——说明**代理本身可用**，是 doris 根本没有这个资产 |
+| GitHub Releases API（api.github.com 可达 ✓） | `apache/doris` 各 release **资产数为 0**（4.1.4.1 / 4.1.4 / 4.0.8） |
+
+即：**GitHub 也没有 Doris 的二进制**（它的发行包只放在官方 OSS 桶）。第三方转载仓库不去搜——
+那是来源不明的再分发，供应链风险大于收益。
+
 ## 这一项**没有**证明什么（避免被读成结论）
 
 - 没有证明 Doris 与当前代码不兼容（本轮没跑起来过）；

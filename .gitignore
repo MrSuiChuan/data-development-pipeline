@@ -26,3 +26,10 @@ __pycache__/
 .awr/executions/
 # AWR 的文件清单快照，由 intake inspect 重新生成
 .awr/intake/inventory.json
+
+# 本机跑真引擎联调时产生的运行时产物（Spark 的 Derby 元数据库等）。
+# 这些不是源码：曾把 metastore_db/ 整目录提交进仓库（OSS-002），这里补上规则防再入。
+metastore_db/
+derby.log
+spark-warehouse/
+warehouse/
