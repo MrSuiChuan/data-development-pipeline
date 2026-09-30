@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### Added（Doris 真跑通过：官方二进制原生 FE+BE，WSL-001）
+
+矩阵里 Doris 那行从"本轮未验证"变成"真跑通过"。上一轮卡住的原因不是网络拿不到包，而是**在猜对象名**：
+官方下载页给出的真实地址是 `apache-doris-4.1.4.1-bin-x64.tar.gz`（`.tar.gz`，不是猜的 `.tar.xz`）。
+换成"从官方页面取真实地址 → 8 路分片下载（单流会掉到 KB/s 级）→ sha512 校验"之后：
+
+- 官方二进制（4,253,509,898 B）解包后在 WSL 里原生起 FE+BE（**不是 Docker**），
+  `show frontends`/`show backends` 均 `Alive: true`，版本 `doris-4.1.4.1-rc02-5dbec55b399`；
+- 插件链路跑通：`doctor → ddl render → 建表 → 写入 → 读回 3 行 / 60.75 → 账本 → evidence verify →
+  **P3 出口门 FAIL=0**（与 ClickHouse/Trino/Hive/Spark/PG 同一验收口径）；
+- 三个只在真机上暴露的环境约束写成了可照抄的处置：FE **硬要求 JDK 17**（宿主 JDK 21 被拒）、
+  BE 的 `vm.max_map_count`/swap 前置检查在单机要显式跳过（`SKIP_CHECK_ULIMIT=true`，生产必须配）、
+  单 BE 集群要显式 `replication_allocation=tag.location.default:1`。
+- 报告：[docs/TEST-REPORT-doris-live-2026-09-30.md](docs/TEST-REPORT-doris-live-2026-09-30.md)；
+  接入页：[docs/engines/doris.md](docs/engines/doris.md)。
+
+### Fixed（真跑揪出的 Doris DDL 缺陷：ENGINE 与键子句的顺序）
+
+为 Doris/StarRocks 生成的建表模板把 `ENGINE = OLAP` 写在键子句**之后**，Doris 4.1.4.1 直接语法错：
+`mismatched input 'ENGINE' expecting {<EOF>, ';'}`——解析器读完键子句就收尾了。现在 `ENGINE` 在前、
+键子句在后（与两家文档的写法一致）。同一个模板还加了一句提示：没给
+`replication_num`/`replication_allocation` 时提醒单 BE 集群会因默认副本数 3 建表失败（给了就不提醒）。
+回归用例：`tests/test_ddl.py::test_doris_starrocks_key_clause_is_outside_column_list`（顺序）与
+`::test_doris_replication_hint_only_when_unspecified`（提示的出现/消失）。
+真引擎同时给方言规则背书：唯一模型表 `UPDATE` 成功、`DUPLICATE KEY` 表报
+`Only unique table could be updated.`，与 `dialect.doris.row_write_needs_key_model` 这条 WARN 一致。
+
 ### Changed（许可证：MIT → Apache-2.0）
 
 用户要求把许可换成 Apache-2.0。这不是换个文件就完事：Apache-2.0 的惯例是 `LICENSE` 只放官方全文

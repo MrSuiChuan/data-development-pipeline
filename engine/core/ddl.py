@@ -315,11 +315,16 @@ def render_ddl(spec: Any, dialect: str, fmt_override: Optional[str] = None) -> D
         else:
             header = f"CREATE TABLE IF NOT EXISTS {table} (\n{columns_sql}\n)"
         sql = [header]
-        if primary_key and dialect in ("doris", "starrocks"):
-            sql.append(f"UNIQUE KEY ({', '.join(primary_key)})")
-            warnings.append("Doris/StarRocks 的键子句按唯一模型生成（UNIQUE KEY）：聚合/明细模型请手工改成 AGGREGATE KEY / DUPLICATE KEY")
-        engine_name = {"mysql": "InnoDB", "doris": "OLAP", "starrocks": "OLAP"}[dialect]
-        sql.append(f"ENGINE = {engine_name}")
+        if dialect in ("doris", "starrocks"):
+            # 真引擎实测（Doris 4.1.4.1）：ENGINE 必须在键子句**之前**。
+            # 反过来写会直接语法错：mismatched input 'ENGINE' expecting {<EOF>, ';'}——
+            # 解析器读完键子句就收尾了，所以顺序不是风格问题。
+            sql.append("ENGINE = OLAP")
+            if primary_key:
+                sql.append(f"UNIQUE KEY ({', '.join(primary_key)})")
+                warnings.append("Doris/StarRocks 的键子句按唯一模型生成（UNIQUE KEY）：聚合/明细模型请手工改成 AGGREGATE KEY / DUPLICATE KEY")
+        else:
+            sql.append("ENGINE = InnoDB")
         if comment:
             sql.append(f"COMMENT {_quote_string(comment)}")
         if dialect in ("doris", "starrocks"):
@@ -330,6 +335,13 @@ def render_ddl(spec: Any, dialect: str, fmt_override: Optional[str] = None) -> D
                 warnings.append("Doris/StarRocks 的分区子句未自动生成（分区类型与取值范围要按业务定），spec.partition_by 仅供人工参考")
             if properties:
                 sql.append(props_clause("PROPERTIES"))
+            if not any(str(k) in ("replication_num", "replication_allocation") for k in (properties or {})):
+                warnings.append(
+                    "没给 replication_num/replication_allocation：Doris/StarRocks 默认副本数是 3，"
+                    "单 BE 的本地集群建表会直接失败（replication num should be less than the number of "
+                    "available backends）——单机联调时在 spec.properties 里加 "
+                    "replication_allocation=tag.location.default:1"
+                )
         elif properties:
             warnings.append("MySQL 没有表属性语法：spec.properties 已忽略（表模型/字符集请在建表语句里手工表达）")
     else:  # generic / postgres

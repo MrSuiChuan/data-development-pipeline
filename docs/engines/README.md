@@ -30,7 +30,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 | mysql | dbapi | mysql | host | 3306 | none | **真跑通过（经 kind=command + engine=mysql，MySQL 8.4.4，2026-09-28）**；dbapi/pymysql 直连路径未跑 |
 | tidb | dbapi | mysql | host | 4000 | none | 未验证（按 MySQL 方言处理） |
 | oceanbase | dbapi | mysql | host | 2881 | none | 未验证（MySQL 模式） |
-| doris | dbapi | doris | host | 9030 | none | **本轮未验证**（镜像源拒绝 `apache/doris`、Aliyun tarball 404）：见 [TEST-REPORT-doris-unverified.md](TEST-REPORT-doris-unverified.md)；旧报告 [TEST-REPORT-doris-live.md](TEST-REPORT-doris-live.md)（2026-09-13）是更早环境的记录，本轮未复现 |
+| doris | dbapi | doris | host | 9030 | none | **真跑通过（官方二进制 4.1.4.1-rc02 原生 FE+BE，2026-09-30）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0；真引擎揪出并修掉 DDL 的 ENGINE/键子句顺序缺陷——见 [TEST-REPORT-doris-live-2026-09-30.md](TEST-REPORT-doris-live-2026-09-30.md)（上一轮"未验证"的现场留在 [TEST-REPORT-doris-unverified.md](TEST-REPORT-doris-unverified.md)，更早的全流水线记录在 [TEST-REPORT-doris-live.md](TEST-REPORT-doris-live.md)） |
 | starrocks | dbapi | starrocks | host | 9030 | none | **本轮未验证**（镜像拉取多次失败）：见 [TEST-REPORT-starrocks-unverified.md](TEST-REPORT-starrocks-unverified.md) |
 | generic-sql | dbapi | generic | host | - | none | 未验证（按 MySQL 协议） |
 | hive | command | hive | command.run | - | none | **真跑通过（Hive 4.0 单机，2026-09-29）**：分区列模板修正后建表成功、读回 3 行/60.75、P3 出口门 FAIL=0 |
@@ -53,6 +53,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 | --- | --- |
 | hive | [hive.md](hive.md) |
 | spark | [spark.md](spark.md) |
+| doris | [doris.md](doris.md) |
 | clickhouse | [clickhouse.md](clickhouse.md) |
 | trino / presto | [trino.md](trino.md) |
 | postgres / greenplum | [postgres.md](postgres.md) |
@@ -66,8 +67,9 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 [ClickHouse 24.8](TEST-REPORT-clickhouse-live.md) ｜ [Trino 476](TEST-REPORT-trino-live.md) ｜
 [Hive 4.0](TEST-REPORT-hive-live.md) ｜ [Spark 4.1.3](TEST-REPORT-spark-live.md) ｜
 [湖表格式 ×4（Iceberg/Delta/Hudi/Paimon）](TEST-REPORT-lakehouse-live.md) ｜
-[Doris（本轮未验证）](TEST-REPORT-doris-unverified.md) ｜
+[Doris 4.1.4.1](TEST-REPORT-doris-live-2026-09-30.md) ｜
 [StarRocks（本轮未验证）](TEST-REPORT-starrocks-unverified.md) ｜
+[Doris 上一轮未验证的现场](TEST-REPORT-doris-unverified.md) ｜
 [Doris 历史记录（2026-09-13）](TEST-REPORT-doris-live.md)。
 
 ## 湖表格式（与执行引擎正交）

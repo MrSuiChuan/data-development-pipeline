@@ -109,6 +109,29 @@ class RenderTemplateTests(unittest.TestCase):
             self.assertNotIn("PRIMARY KEY", body, f"{dialect} 的键子句写进了列定义（语法错）")
             self.assertIn("UNIQUE KEY (user_id)", sql)
             self.assertIn("DISTRIBUTED BY HASH(user_id)", sql)
+            # 真引擎教训（Doris 4.1.4.1）：ENGINE 必须写在键子句**之前**。
+            # 反过来写时 Doris 直接报 mismatched input 'ENGINE' expecting {<EOF>, ';'}——
+            # 它读完键子句就收尾了，所以这是语法顺序，不是排版偏好。
+            self.assertLess(
+                sql.index("ENGINE = OLAP"), sql.index("UNIQUE KEY (user_id)"),
+                f"{dialect} 把 ENGINE 写在键子句后面了（真引擎会语法错）",
+            )
+
+    def test_doris_replication_hint_only_when_unspecified(self) -> None:
+        """单 BE 集群建表会因默认副本数 3 失败——渲染时必须提醒，且给了参数就不啰嗦。"""
+        without = ddl.render_ddl(SPEC, "doris")["warnings"]
+        self.assertTrue(
+            any("replication" in w for w in without),
+            "没给 replication_* 时应有提示（单 BE 本地集群会直接失败）",
+        )
+        spec = dict(SPEC)
+        spec["properties"] = {"replication_allocation": "tag.location.default:1"}
+        sql = ddl.render_ddl(spec, "doris")["sql"]
+        self.assertIn("'replication_allocation'='tag.location.default:1'", sql)
+        self.assertFalse(
+            any("没给 replication_num/replication_allocation" in w for w in ddl.render_ddl(spec, "doris")["warnings"]),
+            "给了副本配置就不该再提示",
+        )
 
     def test_mysql_has_no_properties_clause(self) -> None:
         parts = ddl.render_ddl(SPEC, "mysql")
