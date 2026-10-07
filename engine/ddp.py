@@ -992,6 +992,17 @@ def verb_deploy(flags: Dict[str, str]) -> None:
     pipeline = Pipeline(req)
     comment = flags.get("comment", "")
     plan_pre = context.load_json(req / "deploy_plan.json") or {}
+    # 真语料测试教训（2026-10-07）：计划缺失时旧代码会"零结果 + ok:true"地空跑，
+    # 而且因为读不到 env，连 [已确认发布] 门都一起跳过——看起来成功，实际什么都没发。
+    if not (plan_pre.get("items") or []):
+        emit({
+            "ok": False,
+            "blocked": True,
+            "gate": "deploy_plan",
+            "reason": "deploy_plan.json 缺失或 items 为空：P5 没有可发布的项。"
+                      "先写计划（每项含 action=create|alter|backfill 与 table），再带 [已确认发布] 走部署。",
+        })
+        sys.exit(1)
     plan_env = str(plan_pre.get("env") or "").lower()
     is_prod = plan_env in ("prod", "production")
     if is_prod and "[已确认发布]" not in comment:

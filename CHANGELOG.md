@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+### Added（拿真实数仓仓库当语料：两插件端到端功能测试，LR 系列）
+
+用 [data-warehouse-learning](https://github.com/MrSuiChuan/data-warehouse-learning)（电商数仓实战，
+872 份 SQL、其中 739 份含 `CREATE TABLE`）当语料，对离线数开插件与记忆插件（knowledge-base-plugin）
+做了一轮端到端功能测试。完整报告：[docs/TEST-REPORT-repo-corpus-e2e.md](docs/TEST-REPORT-repo-corpus-e2e.md)。
+
+覆盖：静态方言检查（全语料 740 份）、语料真实表结构 → 多方言 DDL → 真引擎建表/写入/读回、
+六阶段 mock + live（工单走到"已交付"）、7 条门控负例、其余 verb；记忆插件
+setup→snapshot→skeleton→generate→audit→propose→review→publish→refresh→status 全流程；
+以及跨插件契约（记忆插件产物同步进数开项目、数开侧 `kb search`/`kb read` 真读到）。
+
+### Fixed（真实语料里挖出的四条缺陷）
+
+- **括号配对检查误报**：15 份 Flink SQL 因注释里"全角（ + 半角)"被判语法错。改为只对剥掉注释/字符串后的
+  代码骨架配对；用例 `tests/test_engines.py::test_bracket_check_ignores_comments_and_strings`（15 → 0）。
+- **环境脚本被判缺目标表**：`SET …; CREATE CATALOG …;` 这类文件不再要求 `-- table:`，降为
+  `sql.compliance.env_script` WARN；用例 `::test_env_script_does_not_need_table_annotation`（1 → 0）。
+- **分区提示忽略显式 `PARTITIONED BY`**：Hudi 表用 `k1` 当分区列时不再提示"未发现分区字段"；
+  用例 `::test_partition_hint_respects_explicit_partition_clause`（24 → 0）。
+- **`deploy` 无计划时空跑还报成功**：旧代码返回 `{"ok": true, "results": []}`，且因读不到 `env`
+  连 `[已确认发布]` 门也跳过了——典型的假成功。现在计划缺失/`items` 为空直接拦（`gate: deploy_plan`）；
+  用例 `tests/test_flow_options.py::test_deploy_without_plan_blocks_instead_of_silent_noop`。
+
+### Changed（测试台账）
+
+`.awr/intake/GOALS.md` 新增 `goal#repo-corpus-e2e`，台账新增 `LR-001…LR-008` 并逐条收口
+（含"未覆盖项"的如实记录：OceanBase、记忆插件 live 模式、CI 运行记录、语料 DML 未真跑）。
+
 ### Added（真跑驱动脚本入库：tools/live，CLOSE-011）
 
 18 份 `TEST-REPORT-*.md` 之前只有"现场"，没有可复跑的驱动——脚本都躺在 `.tmp`（gitignored）。

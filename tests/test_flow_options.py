@@ -477,6 +477,17 @@ class FlowOptionTests(unittest.TestCase):
         issues = validators.validate_phase5_deploy(self.req, {})
         self.assertFalse([i for i in issues if i.code == "deploy.dqc.not_deployed"], issues)
 
+    def test_deploy_without_plan_blocks_instead_of_silent_noop(self) -> None:
+        """真语料测试教训（2026-10-07，data-warehouse-learning 那轮 live 六阶段）：
+
+        计划文件缺失时，旧代码会"零结果 + ok:true"地空跑，而且读不到 env 连 [已确认发布] 门也一起跳过——
+        看起来像发布成功。现在必须显式拦住。
+        """
+        self.assertFalse((self.req / "deploy_plan.json").exists())
+        proc = run_engine(self.root, "deploy", "--ticket", "T-0001", "--comment", "[已确认发布] x")
+        self.assertNotEqual(proc.returncode, 0, proc.stdout)
+        self.assertIn("deploy_plan", proc.stdout)
+
     def test_status_gate_diagnoses_current_phase(self) -> None:
         self.pipeline.state["current_phase"] = 2
         self.pipeline.save()

@@ -76,6 +76,18 @@ def blockers(issues: Iterable[Issue]) -> List[Issue]:
     return [i for i in issues if i.severity in ("FAIL", "HALTED")]
 
 
+def _paren_scan_text(text: str) -> str:
+    """剥掉注释与字符串字面量，只留"代码骨架"给括号/引号配对检查用。
+
+    为什么需要它：中文 SQL 注释里常写「全角（ + 半角)」，直接在原文上数括号会把注释判成语病
+    （真语料实测，见 2026-10-07 的 data-warehouse-learning 测试）。字符串里的括号同理。
+    """
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)      # 块注释
+    text = re.sub(r"--[^\n]*", " ", text)                   # 行注释
+    text = re.sub(r"'(?:''|[^'])*'", "''", text)            # 单引号字符串（含 '' 转义）
+    return text
+
+
 def _nonempty_markdown(path: Path) -> bool:
     text = context.read_text(path).strip()
     return len(text) >= 10
@@ -644,10 +656,26 @@ def sql_compliance_check(
         r"\b(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|MERGE|REPLACE|LOAD|COPY|EXPORT)\b",
         upper,
     )
+    # 环境脚本：仓库里 `SET ...; CREATE CATALOG ...;` 这类文件不是"表 DDL"，
+    # 不该被要求写 `-- table:`（真语料教训：data-warehouse-learning 的 flink/*/catalog/*.sql）
+    env_only = bool(re.search(r"\bCREATE\s+(CATALOG|DATABASE|FUNCTION)\b", upper)) and not re.search(
+        r"\bCREATE\s+TABLE\b", upper
+    )
 
     # --- hard rules 1-9 -------------------------------------------------
     if not target:
-        if read_only:
+        if env_only:
+            issues.append(
+                Issue(
+                    "sql.compliance.env_script",
+                    phase,
+                    "WARN",
+                    "环境脚本（SET / CREATE CATALOG / CREATE DATABASE 等）：不需要 -- table 目标表注解",
+                    rule=1,
+                    file=filename,
+                )
+            )
+        elif read_only:
             issues.append(
                 Issue(
                     "sql.compliance.readonly",
@@ -717,9 +745,13 @@ def sql_compliance_check(
         )
 
     # coarse syntax sanity: balanced brackets/quotes, no stray backticks
-    if upper.count("(") != upper.count(")") or upper.count("[") != upper.count("]"):
+    # 只对"代码部分"配对：先剥注释与字符串字面量。
+    # 真语料教训（2026-10-07，data-warehouse-learning）：中文注释里常见全角「（」配半角「)」，
+    # 直接对原文 count('(')/count(')') 会把这类**注释**判成语法错——实测 15 个 FAIL 全是同一类。
+    code = _paren_scan_text(text)
+    if code.count("(") != code.count(")") or code.count("[") != code.count("]"):
         issues.append(Issue("sql.compliance.unbalanced", phase, "FAIL", "括号不配对，语法护栏拦截", rule=5, file=filename))
-    if upper.count("'") % 2 == 1:
+    if code.count("'") % 2 == 1:
         issues.append(Issue("sql.compliance.unbalanced_quote", phase, "FAIL", "单引号不配对，语法护栏拦截", rule=5, file=filename))
 
     ddl_targets = ddl_targets or []
@@ -785,7 +817,14 @@ def sql_compliance_check(
         issues.append(Issue("sql.compliance.group_no_agg", phase, "WARN", "GROUP BY 无聚合函数？请核对语义", rule=14, file=filename))
     if not annotations.get("table") and target:
         issues.append(Issue("sql.compliance.no_table_annotation", phase, "WARN", "建议加 -- table: 注解", rule=15, file=filename))
-    if re.search(r"\bcast\s*\(", upper, re.IGNORECASE) and re.search(r"\bdate\b", upper, re.IGNORECASE) is None and "ds" not in upper.lower():
+    # 已经写了 PARTITIONED BY 的，不算"没写分区"——分区列不一定叫 ds/date
+    # （真语料教训：data-warehouse-learning 的 Hudi 表用 `k1` 当分区列，24 条 WARN 全是这一类）
+    if (
+        re.search(r"\bcast\s*\(", upper, re.IGNORECASE)
+        and re.search(r"\bdate\b", upper, re.IGNORECASE) is None
+        and "ds" not in upper.lower()
+        and not re.search(r"\bPARTITIONED\s+BY\b", upper)
+    ):
         issues.append(Issue("sql.compliance.partition_hint", phase, "WARN", "未发现分区字段（ds/date）相关写法，请核对", rule=16, file=filename))
     if text.strip().lower().startswith(("select", "insert", "update", "delete")) and ";" in text and text.count(";") > 1:
         issues.append(Issue("sql.compliance.multi_statement", phase, "WARN", "单文件多语句：请拆文件或用 batch 标注", rule=17, file=filename))

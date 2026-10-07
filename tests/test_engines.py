@@ -156,6 +156,51 @@ class DialectRuleTests(unittest.TestCase):
         issues = validators.sql_compliance_check(text, filename="t.sql", dialect=dialect)
         return {i.code: i.severity for i in issues}
 
+    def test_bracket_check_ignores_comments_and_strings(self) -> None:
+        """真语料教训（2026-10-07，data-warehouse-learning）：中文注释里「全角（ + 半角)」不该判语法错。
+
+        修前该规则直接在原文上数括号，15 个真实 Flink SQL 被误报成 FAIL；
+        修后只数"代码骨架"（剥掉注释与字符串），真不配对仍然要拦。
+        """
+        commented = (
+            "-- 说明：sku名称（冗余)、图片名称（冗余)\n"
+            "-- table: t\n"
+            "CREATE TABLE t (id BIGINT COMMENT '名称（冗余)') WITH ('connector'='x');\n"
+        )
+        self.assertNotIn("sql.compliance.unbalanced", self._severities(commented, "flink"))
+
+        really_unbalanced = (
+            "-- table: t\n"
+            "CREATE TABLE t (id BIGINT COMMENT 'ok' WITH ('connector'='x';\n"
+        )
+        self.assertEqual(self._severities(really_unbalanced, "flink").get("sql.compliance.unbalanced"), "FAIL")
+
+    def test_env_script_does_not_need_table_annotation(self) -> None:
+        """真语料教训：`SET ...; CREATE CATALOG ...;` 是环境脚本，不是表 DDL。
+
+        修前它被判 `sql.compliance.target` FAIL（"无法识别目标表"）——真实仓库里
+        flink/*/catalog/*.sql 与 flink/*/ods 的 SET 段都会踩到。
+        """
+        env = (
+            "SET 'execution.checkpointing.interval' = '10s';\n"
+            "CREATE CATALOG hudi_catalog WITH ('type' = 'hudi', 'mode' = 'hms');\n"
+        )
+        severities = self._severities(env, "flink")
+        self.assertEqual(severities.get("sql.compliance.env_script"), "WARN")
+        self.assertNotIn("sql.compliance.target", severities)
+
+    def test_partition_hint_respects_explicit_partition_clause(self) -> None:
+        """真语料教训：Hudi 表用 `k1` 当分区列（PARTITIONED BY (`k1`)），不该再提示"未发现分区字段"。"""
+        ddl = (
+            "-- table: dws_t\n"
+            "CREATE TABLE IF NOT EXISTS dws_t (\n"
+            "  k1 STRING COMMENT 'partition field',\n"
+            "  amt DECIMAL(16,2)\n"
+            ") PARTITIONED BY (`k1`) WITH ('connector' = 'hudi');\n"
+            "SELECT CAST(amt AS DECIMAL(16,2)) FROM dws_t;\n"
+        )
+        self.assertNotIn("sql.compliance.partition_hint", self._severities(ddl, "flink"))
+
     def test_baseline_is_unchanged_without_dialect(self) -> None:
         sql = "DELETE FROM orders WHERE ds='20260901';"
         baseline = self._severities(sql)
