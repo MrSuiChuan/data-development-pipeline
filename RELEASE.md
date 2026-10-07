@@ -16,7 +16,10 @@
 git switch -c release/vX.Y.Z        # 从 main 切发布分支
 python -m unittest discover -s tests    # 全量用例：门控/状态机/不变量/开源就绪都在这套里（数量以输出为准）
 python -m compileall -q engine hooks tests tools
-python tools/build_codex_surface.py --check   # 生成物与命令源一致
+# 生成物与命令源一致：跑生成器后比对（该工具没有 --check，它只会重写；
+# 逐字节比对在 tests/test_generated_surface.py 里）
+python tools/build_codex_surface.py && git diff --exit-code -- .codex-plugin hooks skills engine/templates
+python -m unittest tests.test_generated_surface
 python tools/adapt_hooks.py --check           # 非 Windows 平台必跑（启动器不可用会让 hook 静默失效）
 git status --short                            # 必须为空：生成物已提交
 ```

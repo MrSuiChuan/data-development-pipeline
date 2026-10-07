@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-10-07
+
+**主题：把"支持主流大数据组件"从声明变成现场。** 从 1.2.2 到现在，矩阵里除 OceanBase 外所有能在本地
+起起来的 kind 都有了真跑记录，插件自己的六阶段流水线也第一次在 live 模式（真引擎）跑完整闭环。
+
+### 谁受影响、要不要迁移
+
+- **使用方**：不需要改配置。新增能力全是可选项。
+- **唯一的行为变化（要留意）**：`platform.profiles.<env>.command.run` 以前被**静默忽略**
+  （`CommandPlatformClient` 只在初始化时读一次 argv），现在按环境生效。如果你的 prod profile 里
+  写过 `command`，升级后 P5 部署会真的用那份 argv——这正是它该有的行为，但请确认那份 argv
+  指向的确实是 prod（本次真跑就是在生产链路里发现"声称发 prod、实际跑 dev"的）。
+- **升级三步**：拉取 → 非 Windows 跑 `python3 tools/adapt_hooks.py` → 开新会话。
+
+### 已知边界（发布说明里同样如实写）
+
+- **OceanBase 仍未验证**（镜像大层拉不动 + 单机需 2–4GB 内存）：见台账 `CLOSE-009` 的解除条件；
+- 引擎真跑都限于**单机/本地形态**：YARN/K8s 提交、远端存储（S3/OSS/HDFS）、多节点/副本 3、
+  流式与状态恢复等仍是各引擎页"已知缺口"里列明的未验证项；
+- **CI 运行记录未核**：仓库私有且本机无 token，DEVEX-001/003、ENG-002 只有"配置覆盖 + 本地等价命令"作证；
+- live 六阶段的工单系统用的是 JSON CLI 替身，KB/DQC 连接器未接真；
+- 所有真跑的证据级别是 `local_receipt`（command/dbapi 族拿不到平台 query_id）。
+
+### 本次发布的验证门
+
+`python -m unittest discover -s tests`（数量以输出为准）、`python -m compileall -q engine hooks tests tools`、
+`tools/generate_engine_manifest.py` + `git diff --exit-code`、`tests/test_generated_surface.py`、
+WSL 侧 `tools/adapt_hooks.py --check`、`git status --short` 为空。
+
 ### Added（generic-sql 真跑通过：兜底 kind 的最小 DDL 行为被真库验证，CLOSE-010）
 
 `generic-sql` 是"任何 MySQL 协议兼容库"的兜底 kind（`dialect=generic`，只有基线 17 项规则）。
