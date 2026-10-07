@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added（Greenplum 6.8.1 真跑通过，CLOSE-008）
+
+greenplum 与 postgres 共用方言，但它毕竟是 MPP 发行版，所以单独跑了一份现场：
+镜像 `datagrip/greenplum:6.8`（1.16 GB，`docker.1panel.live`）→ 容器内 `gpinitsystem` 初始化单机集群 →
+`kind=greenplum`（command 族，dialect=postgres）→ 建表 → 写入 3 行 → 读回 **3 行 / 60.75** →
+账本 → `evidence verify` → **P3 出口门 FAIL=0（WARN=3）**，并额外查了一次 `gp_segment_id` 分布。
+两个坑写进报告与矩阵：`psql` 必须先 `source <GP_HOME>/greenplum_path.sh`（否则 `libpq.so.5` 缺失），
+镜像里 psql 在 `/opt/greenplum-db-6.8.1/bin/psql`。
+报告：[docs/TEST-REPORT-greenplum-live.md](docs/TEST-REPORT-greenplum-live.md)。
+
+### Known limit（OceanBase 本轮未跑成，现场留档，CLOSE-009）
+
+`docker.1panel.live/oceanbase/oceanbase-ce` 的 tag 列表可见（3.1.x~4.2.x），但大层反复 Retrying
+约 8 分钟未拉全（与当初 StarRocks 的形态相同），已停掉避免占带宽；单机 OB 还需 2-4 GB 内存，
+本机 7.84 GB 且常有别的任务在跑。解除条件写在台账 `CLOSE-009`：换稳定网络/给镜像 tar，
+或机器空闲出 4 GB+ 再跑一次。oceanbase 走的是 mysql 方言，引擎链路已由 TiDB/MySQL 两轮真跑背书。
+
 ### Added（PrestoDB 0.299 真跑通过，CLOSE-007）
 
 矩阵里 presto 一直写"与 Trino 共用方言规则、未验证"——PrestoDB 与 Trino 是两个发行版，这轮用

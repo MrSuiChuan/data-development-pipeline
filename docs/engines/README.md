@@ -41,7 +41,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 | trino | command | trino | command.run | 8080 | iceberg/hudi/delta/none | **真跑通过（Trino 476 + memory connector，2026-09-29）**：模板改掉 format 缺陷后建表成功、P3 出口门 FAIL=0 |
 | presto | command | trino | command.run | 8080 | none | **真跑通过（PrestoDB 0.299 + memory connector，2026-10-07）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0；`DELETE` 由 connector 决定（memory 报不支持）——见 [TEST-REPORT-presto-live.md](TEST-REPORT-presto-live.md) |
 | postgres | command | postgres | command.run | 5432 | none | **真跑通过（PostgreSQL 16，2026-09-28）**：建表/写入/读回/证据落账/verify |
-| greenplum | command | postgres | command.run | 5432 | none | 未验证（GP 专有项未建模） |
+| greenplum | command | postgres | command.run | 5432 | none | **真跑通过（Greenplum 6.8.1 单机镜像，2026-10-07）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0；`psql` 要 `source greenplum_path.sh`、路径在 `/opt/greenplum-db-6.8.1/bin`——见 [TEST-REPORT-greenplum-live.md](TEST-REPORT-greenplum-live.md) |
 | odps | command | odps | command.run | - | none | **不可本地复现**（云服务）：模板/方言规则/doctor 有单测，真跑需要云账号 + 项目空间，见 [odps.md](odps.md) |
 | command | command | generic | command.run | - | none | 自定义 argv，按 generic 方言 |
 | cli | cli | generic | -（默认执行名 platform） | - | none | 契约在 docs/REPRODUCTION-NOTES.md 1.2.2，未接真实平台 |
@@ -71,6 +71,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 [Flink 1.20.3 + Paimon 1.4.1](TEST-REPORT-flink-paimon-live.md) ｜
 [TiDB v7.5.4](TEST-REPORT-tidb-live.md) ｜
 [PrestoDB 0.299](TEST-REPORT-presto-live.md) ｜
+[Greenplum 6.8.1](TEST-REPORT-greenplum-live.md) ｜
 [湖表格式 ×4（Iceberg/Delta/Hudi/Paimon）](TEST-REPORT-lakehouse-live.md) ｜
 [Doris 4.1.4.1](TEST-REPORT-doris-live-2026-09-30.md) ｜
 [StarRocks 3.3.9](TEST-REPORT-starrocks-live.md) ｜
