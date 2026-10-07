@@ -32,7 +32,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 | oceanbase | dbapi | mysql | host | 2881 | none | 未验证（MySQL 模式） |
 | doris | dbapi | doris | host | 9030 | none | **真跑通过（官方二进制 4.1.4.1-rc02 原生 FE+BE，2026-09-30）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0；真引擎揪出并修掉 DDL 的 ENGINE/键子句顺序缺陷——见 [TEST-REPORT-doris-live-2026-09-30.md](TEST-REPORT-doris-live-2026-09-30.md)（上一轮"未验证"的现场留在 [TEST-REPORT-doris-unverified.md](TEST-REPORT-doris-unverified.md)，更早的全流水线记录在 [TEST-REPORT-doris-live.md](TEST-REPORT-doris-live.md)） |
 | starrocks | dbapi | starrocks | host | 9030 | none | **真跑通过（官方镜像 3.3.9-dfae8f9 FE+BE，2026-09-30）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0；真引擎揪出 `BUCKETS AUTO`（Doris 专有）与"UPDATE 要主键模型"两处——见 [TEST-REPORT-starrocks-live.md](TEST-REPORT-starrocks-live.md)（上一轮"未验证"的现场留在 [TEST-REPORT-starrocks-unverified.md](TEST-REPORT-starrocks-unverified.md)） |
-| generic-sql | dbapi | generic | host | - | none | 未验证（按 MySQL 协议） |
+| generic-sql | dbapi | generic | host | - | none | **真跑通过（MySQL 8.4.4 通过 generic-sql 接入，2026-10-07）**：`ddl render` 出的是"不带主键/属性"的最小 DDL（generic 只有基线 17 项规则），建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0——见 [TEST-REPORT-generic-sql-live.md](TEST-REPORT-generic-sql-live.md) |
 | hive | command | hive | command.run | - | none | **真跑通过（Hive 4.0 单机，2026-09-29）**：分区列模板修正后建表成功、读回 3 行/60.75、P3 出口门 FAIL=0 |
 | spark | command | spark | command.run | - | iceberg/hudi/delta/paimon/none | **真跑通过（Spark 4.1.3 local 模式，2026-09-29）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0 |
 | flink | command | flink | command.run | - | paimon/iceberg/hudi/none | **真跑通过（Flink 1.20.3 + Paimon 1.4.1，2026-10-07）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0；四条真机接线问题见报告——见 [TEST-REPORT-flink-paimon-live.md](TEST-REPORT-flink-paimon-live.md) |
@@ -72,6 +72,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 [TiDB v7.5.4](TEST-REPORT-tidb-live.md) ｜
 [PrestoDB 0.299](TEST-REPORT-presto-live.md) ｜
 [Greenplum 6.8.1](TEST-REPORT-greenplum-live.md) ｜
+[generic-sql（MySQL 8.4.4 接入）](TEST-REPORT-generic-sql-live.md) ｜
 [湖表格式 ×4（Iceberg/Delta/Hudi/Paimon）](TEST-REPORT-lakehouse-live.md) ｜
 [Doris 4.1.4.1](TEST-REPORT-doris-live-2026-09-30.md) ｜
 [StarRocks 3.3.9](TEST-REPORT-starrocks-live.md) ｜

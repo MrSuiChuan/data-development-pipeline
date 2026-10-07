@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added（generic-sql 真跑通过：兜底 kind 的最小 DDL 行为被真库验证，CLOSE-010）
+
+`generic-sql` 是"任何 MySQL 协议兼容库"的兜底 kind（`dialect=generic`，只有基线 17 项规则）。
+本轮用本机 MySQL 8.4.4 接了一次：`ddl render` 出的是**最小 DDL**（没有主键子句、没有引擎属性，
+generic 不做 MySQL 专属改写）→ 建表 → 写入 3 行 → 读回 **3 行 / 60.75** → 账本 →
+`evidence verify` → **P3 出口门 FAIL=0（WARN=3）**。
+这条真跑把"generic ≠ mysql"从文档措辞变成了现场：两者的差别在"方言检查有多严"，不在协议。
+报告：[docs/TEST-REPORT-generic-sql-live.md](docs/TEST-REPORT-generic-sql-live.md)。
+
 ### Added（Greenplum 6.8.1 真跑通过，CLOSE-008）
 
 greenplum 与 postgres 共用方言，但它毕竟是 MPP 发行版，所以单独跑了一份现场：
