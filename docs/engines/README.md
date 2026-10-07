@@ -35,8 +35,8 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 | generic-sql | dbapi | generic | host | - | none | 未验证（按 MySQL 协议） |
 | hive | command | hive | command.run | - | none | **真跑通过（Hive 4.0 单机，2026-09-29）**：分区列模板修正后建表成功、读回 3 行/60.75、P3 出口门 FAIL=0 |
 | spark | command | spark | command.run | - | iceberg/hudi/delta/paimon/none | **真跑通过（Spark 4.1.3 local 模式，2026-09-29）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0 |
-| flink | command | flink | command.run | - | paimon/iceberg/hudi/none | 插件侧未真跑（开源栈真跑记录见 realtime-data-plugin 的 docs/oss-lab.md） |
-| paimon | command | flink | command.run | - | paimon | 同上（通过 Flink catalog 访问） |
+| flink | command | flink | command.run | - | paimon/iceberg/hudi/none | **真跑通过（Flink 1.20.3 + Paimon 1.4.1，2026-10-07）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0；四条真机接线问题见报告——见 [TEST-REPORT-flink-paimon-live.md](TEST-REPORT-flink-paimon-live.md) |
+| paimon | command | flink | command.run | - | paimon | **真跑通过（同上一行，2026-10-07）**：Paimon catalog 建表 → 写入 → 读回 3 行 60.75（另起 sql-client 直查同一张表复核过） |
 | clickhouse | command | clickhouse | command.run | 9000 | none | **真跑通过（ClickHouse 24.8.14.39，2026-09-29）**：模板直接建表成功、P3 出口门 FAIL=0；UPDATE…FROM 的真报错与 mutation 行为见报告 |
 | trino | command | trino | command.run | 8080 | iceberg/hudi/delta/none | **真跑通过（Trino 476 + memory connector，2026-09-29）**：模板改掉 format 缺陷后建表成功、P3 出口门 FAIL=0 |
 | presto | command | trino | command.run | 8080 | none | 未验证（与 Trino 共用方言规则） |
@@ -53,6 +53,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 | --- | --- |
 | hive | [hive.md](hive.md) |
 | spark | [spark.md](spark.md) |
+| flink / paimon | [flink.md](flink.md) |
 | doris | [doris.md](doris.md) |
 | starrocks | [starrocks.md](starrocks.md) |
 | clickhouse | [clickhouse.md](clickhouse.md) |
@@ -67,6 +68,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 [PostgreSQL 16](TEST-REPORT-postgres-live.md) ｜ [MySQL 8.4.4](TEST-REPORT-mysql-live.md) ｜
 [ClickHouse 24.8](TEST-REPORT-clickhouse-live.md) ｜ [Trino 476](TEST-REPORT-trino-live.md) ｜
 [Hive 4.0](TEST-REPORT-hive-live.md) ｜ [Spark 4.1.3](TEST-REPORT-spark-live.md) ｜
+[Flink 1.20.3 + Paimon 1.4.1](TEST-REPORT-flink-paimon-live.md) ｜
 [湖表格式 ×4（Iceberg/Delta/Hudi/Paimon）](TEST-REPORT-lakehouse-live.md) ｜
 [Doris 4.1.4.1](TEST-REPORT-doris-live-2026-09-30.md) ｜
 [StarRocks 3.3.9](TEST-REPORT-starrocks-live.md) ｜

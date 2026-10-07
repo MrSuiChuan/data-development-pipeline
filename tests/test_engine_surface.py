@@ -48,6 +48,20 @@ class EngineSurfaceTests(unittest.TestCase):
         linked = any("docs/engines/README.md" in self._read(rel) for rel in ("README.md", *SURFACES))
         self.assertTrue(linked, "没有任何面向人的入口指向 docs/engines/README.md")
 
+    def test_engine_pages_do_not_deny_real_config_fields(self) -> None:
+        """CLOSE-003：引擎页说"还没有配置字段"，代码里其实早就有了——这类漂移要拦住。
+
+        实测踩过：docs/engines/spark.md 一直写着 `format` 没有配置字段（COMPAT-011 待办），
+        而 `platform.format` 早就是真字段（engines.py 读它、ddl render/sql check 都按它分流）。
+        """
+        spark = self._read("docs/engines/spark.md")
+        # 原文（错的）是这一句；现在这页留了一条"更正"记录，所以判据钉在原文而不是关键词上
+        self.assertNotIn("**还没有配置字段**（COMPAT-011 待办）", spark, "spark.md 又把 format 说成没有配置字段了")
+        self.assertIn("更正（CLOSE-003", spark, "spark.md 的更正记录丢了")
+        self.assertIn("platform.format", spark, "spark.md 应当写明 format 是哪个字段")
+        code = self._read("engine/core/engines.py") + self._read("engine/ddp.py")
+        self.assertIn('plat.get("format")', code, "代码里 format 字段的读取点没了（文档与代码又对不上了）")
+
 
 if __name__ == "__main__":
     unittest.main()

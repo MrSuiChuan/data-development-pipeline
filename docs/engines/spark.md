@@ -51,5 +51,8 @@
 ## 已知缺口
 
 - 没验证过 YARN/K8s 上 `spark-sql` 的非交互执行与超时行为；
-- `format` 目前只是注册表里的维度与文档约定，**还没有配置字段**（COMPAT-011 待办）；
+- 更正（CLOSE-003，2026-10-07）：这里原先写着"`format` 还没有配置字段"——**是错的**。
+  `format` 早就是真实字段（`platform.format`：`iceberg`/`hudi`/`delta`/`paimon`/`none`，留空即 `none`）：
+  `ddl render` 生成 `USING <format>`、`sql check` 按格式给提示，读取点在 `engine/core/engines.py:358`、
+  `engine/ddp.py:719`、`:772`；
 - 没验证 Spark Thrift Server（JDBC）通道。

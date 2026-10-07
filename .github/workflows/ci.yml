@@ -21,6 +21,14 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m unittest discover -s tests
       - run: python -m compileall -q engine hooks tests tools
+      - name: generated artifacts must match the repo
+        # DEVEX-003 的验收原文：跑生成器后 git diff --exit-code，有差异即失败。
+        # 单元测试里也有等价断言（tests/test_generated_surface.py、test_repo_invariants.py），
+        # 这一步是把它显式挂到 CI 上：生成器改了、忘了重跑，这里直接红。
+        run: |
+          python tools/generate_engine_manifest.py
+          python tools/build_codex_surface.py
+          git diff --exit-code -- engine/.engine-manifest.json .codex-plugin hooks skills engine/templates
       - name: provenance/secret scan
         run: |
           ! rg -n -i "xhdw|alipay|复刻|调研文档|（与原版|见复刻差异" . -g '!.github/**' || exit 1

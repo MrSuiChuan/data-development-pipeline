@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+### Added（Flink 1.20.3 + Paimon 1.4.1 真跑通过，CLOSE-004）
+
+矩阵里 flink / paimon 两行的"插件侧未真跑"填实：官方 tarball 起单机 Flink（批模式）+ Paimon jar，
+走完 `doctor → ddl render → 建表 → 写入 → 读回 3 行 / 60.75 → 账本 → evidence verify → **P3 出口门 FAIL=0**`，
+另起一个 sql-client 直接查 Paimon 表复核过（数据真落盘）。
+报告：[docs/TEST-REPORT-flink-paimon-live.md](docs/TEST-REPORT-flink-paimon-live.md)；
+接入页：[docs/engines/flink.md](docs/engines/flink.md)。
+
+### Fixed（Flink 接线四条真机问题 + 一处文档漂移）
+
+- **`sql-client.sh -f` 出错也返回 0**（实测：SQL 报错、结果模式配错都是 exit 0）。不包一层抓 `[ERROR]`，
+  插件会把失败的 SQL 记成 SUCCESS——那是假证据。接入页给出的 argv 模板就是包了这层的形状。
+- Paimon filesystem catalog 要 Hadoop 类：补 `flink-shaded-hadoop-2-uber`；
+- 单机要 `SET 'execution.target' = 'local';`（默认 remote 会 `Connection refused`）；
+- 非交互跑 `SELECT` 要 `SET 'sql-client.execution.result-mode' = 'TABLEAU';`；
+- 通用 connector 形式（`WITH ('connector'='paimon','path'=…)`）不建物理表，要用 Paimon catalog 建。
+- 文档漂移（CLOSE-003）：`docs/engines/spark.md` 一直写着"`format` 还没有配置字段（COMPAT-011 待办）"，
+  而它早就是真字段（`engines.py` / `ddp.py` 都读它）；改成事实陈述，并加
+  `tests/test_engine_surface.py::test_engine_pages_do_not_deny_real_config_fields` 防回归。
+
+### Changed（CI 补一步生成物同步门）
+
+`ci.yml` 增加 "generated artifacts must match the repo"：跑 `generate_engine_manifest.py` +
+`build_codex_surface.py` 后 `git diff --exit-code`（DEVEX-003 验收原文要求的那一步；单元测试里有等价断言）。
+
 ### Added（StarRocks 真跑通过：官方 FE/BE 镜像，WSL-002）
 
 矩阵里 starrocks 那行也从"本轮未验证"变成"真跑通过"。上一轮卡在"镜像层下载反复超时"，
