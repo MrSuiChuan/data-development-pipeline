@@ -28,7 +28,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 | kind | family | dialect | 必填配置键 | 默认端口 | 湖表格式 | 验证状态 |
 | --- | --- | --- | --- | --- | --- | --- |
 | mysql | dbapi | mysql | host | 3306 | none | **真跑通过（经 kind=command + engine=mysql，MySQL 8.4.4，2026-09-28）**；dbapi/pymysql 直连路径未跑 |
-| tidb | dbapi | mysql | host | 4000 | none | 未验证（按 MySQL 方言处理） |
+| tidb | dbapi | mysql | host | 4000 | none | **真跑通过（TiDB v7.5.4 单机镜像，2026-10-07）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0；`INSERT OVERWRITE` 的真语法错给 MySQL 族 FAIL 规则背书——见 [TEST-REPORT-tidb-live.md](TEST-REPORT-tidb-live.md) |
 | oceanbase | dbapi | mysql | host | 2881 | none | 未验证（MySQL 模式） |
 | doris | dbapi | doris | host | 9030 | none | **真跑通过（官方二进制 4.1.4.1-rc02 原生 FE+BE，2026-09-30）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0；真引擎揪出并修掉 DDL 的 ENGINE/键子句顺序缺陷——见 [TEST-REPORT-doris-live-2026-09-30.md](TEST-REPORT-doris-live-2026-09-30.md)（上一轮"未验证"的现场留在 [TEST-REPORT-doris-unverified.md](TEST-REPORT-doris-unverified.md)，更早的全流水线记录在 [TEST-REPORT-doris-live.md](TEST-REPORT-doris-live.md)） |
 | starrocks | dbapi | starrocks | host | 9030 | none | **真跑通过（官方镜像 3.3.9-dfae8f9 FE+BE，2026-09-30）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0；真引擎揪出 `BUCKETS AUTO`（Doris 专有）与"UPDATE 要主键模型"两处——见 [TEST-REPORT-starrocks-live.md](TEST-REPORT-starrocks-live.md)（上一轮"未验证"的现场留在 [TEST-REPORT-starrocks-unverified.md](TEST-REPORT-starrocks-unverified.md)） |
@@ -39,7 +39,7 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 | paimon | command | flink | command.run | - | paimon | **真跑通过（同上一行，2026-10-07）**：Paimon catalog 建表 → 写入 → 读回 3 行 60.75（另起 sql-client 直查同一张表复核过） |
 | clickhouse | command | clickhouse | command.run | 9000 | none | **真跑通过（ClickHouse 24.8.14.39，2026-09-29）**：模板直接建表成功、P3 出口门 FAIL=0；UPDATE…FROM 的真报错与 mutation 行为见报告 |
 | trino | command | trino | command.run | 8080 | iceberg/hudi/delta/none | **真跑通过（Trino 476 + memory connector，2026-09-29）**：模板改掉 format 缺陷后建表成功、P3 出口门 FAIL=0 |
-| presto | command | trino | command.run | 8080 | none | 未验证（与 Trino 共用方言规则） |
+| presto | command | trino | command.run | 8080 | none | **真跑通过（PrestoDB 0.299 + memory connector，2026-10-07）**：建表/写入/读回 3 行 60.75、P3 出口门 FAIL=0；`DELETE` 由 connector 决定（memory 报不支持）——见 [TEST-REPORT-presto-live.md](TEST-REPORT-presto-live.md) |
 | postgres | command | postgres | command.run | 5432 | none | **真跑通过（PostgreSQL 16，2026-09-28）**：建表/写入/读回/证据落账/verify |
 | greenplum | command | postgres | command.run | 5432 | none | 未验证（GP 专有项未建模） |
 | odps | command | odps | command.run | - | none | **不可本地复现**（云服务）：模板/方言规则/doctor 有单测，真跑需要云账号 + 项目空间，见 [odps.md](odps.md) |
@@ -69,6 +69,8 @@ py -3 .data-dev/engine/ddp.py sql check --file ddl/x.sql --dialect hive
 [ClickHouse 24.8](TEST-REPORT-clickhouse-live.md) ｜ [Trino 476](TEST-REPORT-trino-live.md) ｜
 [Hive 4.0](TEST-REPORT-hive-live.md) ｜ [Spark 4.1.3](TEST-REPORT-spark-live.md) ｜
 [Flink 1.20.3 + Paimon 1.4.1](TEST-REPORT-flink-paimon-live.md) ｜
+[TiDB v7.5.4](TEST-REPORT-tidb-live.md) ｜
+[PrestoDB 0.299](TEST-REPORT-presto-live.md) ｜
 [湖表格式 ×4（Iceberg/Delta/Hudi/Paimon）](TEST-REPORT-lakehouse-live.md) ｜
 [Doris 4.1.4.1](TEST-REPORT-doris-live-2026-09-30.md) ｜
 [StarRocks 3.3.9](TEST-REPORT-starrocks-live.md) ｜

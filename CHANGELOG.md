@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### Added（PrestoDB 0.299 真跑通过，CLOSE-007）
+
+矩阵里 presto 一直写"与 Trino 共用方言规则、未验证"——PrestoDB 与 Trino 是两个发行版，这轮用
+**PrestoDB 0.299** 真跑了一遍：`kind=presto`（command 族，dialect=trino）→ `ddl render`
+（无分区/属性时不生成 `WITH`）→ 建表 → 写入 3 行 → 读回 **3 行 / 60.75** → 账本 → `evidence verify` →
+**P3 出口门 FAIL=0（WARN=3）**。
+
+两条真机细节：① Presto 的 HTTP `/v1/statement` **不接受语句尾部分号**（`SELECT 1;` 报
+`mismatched input ';'`，官方 CLI 会替你剥、裸客户端必须自己剥）；② memory connector 上 `DELETE`
+报 `This connector does not support deletes`，与"能不能删取决于 connector"的 WARN 分级一致。
+取材：Maven Central 直连连续 ranged 请求会被 429，换**华为云 Maven 镜像**（3.4 MB/s）三分钟拉完；
+PrestoDB 在 Maven Central 没有可执行 CLI jar。
+报告：[docs/TEST-REPORT-presto-live.md](docs/TEST-REPORT-presto-live.md)；接入页补在
+[docs/engines/trino.md](docs/engines/trino.md)。
+
+### Added（TiDB v7.5.4 真跑通过：矩阵里最后一块能本地起的空白，CLOSE-006）
+
+`kind=tidb` 走 dbapi（pymysql 直连 4000）：官方单机镜像 `pingcap/tidb:v7.5.4`（526 MB，经
+`docker.1panel.live`）→ `select version()` = `8.0.11-TiDB-v7.5.4`，10 秒就绪 →
+`ddl render`（MySQL 方言：主键在列定义里、`ENGINE=InnoDB`，真引擎接受）→ 写入 3 行 →
+读回 **3 行 / 60.75** → 账本 → `evidence verify` → **P3 出口门 FAIL=0（WARN=3）**。
+顺带拿到一条真引擎背书：`INSERT OVERWRITE` 在 TiDB 上报 `ERROR 1064` 真语法错，
+与 `dialect.mysql.no_insert_overwrite` 的 FAIL 判定一致。
+报告：[docs/TEST-REPORT-tidb-live.md](docs/TEST-REPORT-tidb-live.md)；
+取材记一笔：`download.pingcap.org` 本网络 DNS 不通，`docker.1ms.run`/`hub.rat.dev`/`dockerpull.org`
+拉取超时、`m.daocloud.io` 403，**1panel 能拉通**。
+
 ### Added（live 六阶段端到端真实测试：Flink + Paimon，CLOSE-005）
 
 此前真跑都停在"引擎链路"（doctor → ddl render → 建表 → 写入 → 读回 → 证据 → P3 门）。这一轮把**插件自己的

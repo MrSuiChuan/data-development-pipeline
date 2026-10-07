@@ -8,7 +8,19 @@
 | 必填配置键 | `platform.command.run` |
 | 证据级别 | `local_receipt` |
 | 湖表格式 | `iceberg` / `hudi` / `delta` / `none` |
-| 验证状态 | **真跑通过（Trino 476 + memory connector，2026-09-29）**，见 docs/TEST-REPORT-trino-live.md；Presto 未联调 |
+| 验证状态 | **Trino 与 Presto 都真跑通过**：Trino 476（2026-09-29，见 docs/TEST-REPORT-trino-live.md）、Presto 0.299（2026-10-07，见 docs/TEST-REPORT-presto-live.md） |
+
+## Presto 侧的真机记录（2026-10-07）
+
+- 起法：`presto-server-0.299.tar.gz`（746 MB，**华为云 Maven 镜像**快；Maven Central 直连会 429）
+  → `etc/` 里配 coordinator + `catalog/memory.properties` → `bin/launcher start`（Java 17，18 秒就绪）；
+- 驱动：PrestoDB 在 Maven Central **没有**可执行 CLI jar，本次用 HTTP `/v1/statement` 驱动。
+  **该 API 不接受语句尾部的分号**（`SELECT 1;` 报 `mismatched input ';'`）——官方 CLI 会替你剥掉，
+  裸 HTTP 客户端必须自己剥（脚本里已处理）；
+- 结果：`ddl render`（trino 方言）建表 → 写入 3 行 → 读回 **3 行 / 60.75** → 账本 → verify →
+  **P3 出口门 FAIL=0**；
+- connector 现场：memory connector 上 `DELETE` 报 `This connector does not support deletes`，
+  与"能不能删取决于 connector"这条 WARN 一致。
 
 ## 配置示例
 
