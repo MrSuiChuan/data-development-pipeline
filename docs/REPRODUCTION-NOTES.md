@@ -35,6 +35,13 @@ live 模式要求 `cli.tracker` 指向一个输出 JSON stdout 的 CLI（非 JSO
 
 状态流（不允许跨级）：`已提交 → 开发中 → 待验收 → 待测试 → 待业务验收 → 已交付`。
 
+返回 JSON 的字段名要按引擎消费的来（**2026-10-07 接真 tracker 时实测踩到**）：
+
+- 工单对象至少要有 `id` / `title` / `status`（`list` 返回 `{"items": [...]}` 或直接数组）；
+- 评论对象给 **`anchor` + `content_md`**（与 mock 客户端同形）。只给 `content` 会被当成空评论，
+  于是 `ticket verify-latest` 永远验不过；
+- `comments --id` 返回**按时间序**的列表（新帖在后）——引擎按"最后一条同版本评论"判定最新终版。
+
 `cli.tracker`（以及其它 `cli.*`）既可以写可执行文件路径，也可以写 argv 列表，
 例如 `"tracker": ["py", "-3", "tools/ddp_tracker.py"]`。Windows 上建议用列表形式：
 脚本经 `.cmd` 包装器转发时，cmd.exe 会把多行内容参数按换行切开，后面的

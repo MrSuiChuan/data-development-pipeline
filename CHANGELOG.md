@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### Added（live 六阶段端到端真实测试：Flink + Paimon，CLOSE-005）
+
+此前真跑都停在"引擎链路"（doctor → ddl render → 建表 → 写入 → 读回 → 证据 → P3 门）。这一轮把**插件自己的
+六阶段流水线**放进 live 模式跑在真实引擎上：建单（8 项质量门）→ SDS（八条硬规则 + 贴单回读 + 桥接 + publish）
+→ 准入门 → P2 架构门 → P3 真跑（Flink/Paimon 建表 + 聚合 2 行 / 60.75 + 证据绑定）→ P4 机器证据（真 query_id）
+→ P5 真发布（prod 环境）→ P6 语义层（用户拍板）→ finish，工单状态走到**已交付**。
+报告：[docs/TEST-REPORT-live-pipeline-flink-paimon.md](docs/TEST-REPORT-live-pipeline-flink-paimon.md)。
+
+### Fixed（真流程揪出的两个缺陷：环境隔离被静默忽略 + SDS 终版判定取错评论）
+
+- **P5 声称发布到 prod，实际跑的是 dev**：`CommandPlatformClient` 只在 `__init__` 读一次 argv，
+  `profiles.<env>.command.run` 的覆盖被静默忽略（`_effective_config` 也只合并连接类字段）。
+  现场证据：`deploy_log.json` 的 stdout 指向 `ddp-dev-init.sql`、数据落进 dev warehouse、prod warehouse 为空。
+  现在每次执行按 env 重新解析 argv，profile 可继承或覆盖 `command`；真机复验 `--env prod` 走 prod init、
+  `ddp_prod.db` 落在 prod warehouse。用例：`tests/test_sql_platform.py::test_profile_command_override_is_used_per_env`。
+- **SDS 终版评论判定取错**：真 tracker 里同一版本号被贴两次时，`max()` 平局取第一条（旧的），
+  `ticket verify-latest` 于是永远验不过。现在同版本取**最后一条**，并补用例 `tests/test_spec_latest_comment.py`。
+  顺带把 live tracker 的返回字段契约写进 `docs/REPRODUCTION-NOTES.md` 1.1：评论对象是 `anchor` + **`content_md`**
+  （只给 `content` 会被当成空评论），`comments --id` 按时间序返回。
+
 ### Added（Flink 1.20.3 + Paimon 1.4.1 真跑通过，CLOSE-004）
 
 矩阵里 flink / paimon 两行的"插件侧未真跑"填实：官方 tarball 起单机 Flink（批模式）+ Paimon jar，

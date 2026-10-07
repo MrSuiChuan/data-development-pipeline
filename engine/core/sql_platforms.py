@@ -217,7 +217,10 @@ class SqlPlatformClient(TaskLedgerMixin, clients.PlatformClient):
         target = str(env or base_env)
         profiles = p.get("profiles") or {}
         if target in profiles:
-            merged = {k: p.get(k) for k in ("host", "port", "user", "password", "password_env", "database", "connect_timeout")}
+            # command/format 也要带上：否则 profile 只覆盖 database 时会把 argv 丢掉；
+            # profile 自己写 command 时下面的 update 会整段覆盖（这正是 prod 用另一个 warehouse 的方式）。
+            merged = {k: p.get(k) for k in ("host", "port", "user", "password", "password_env",
+                                            "database", "connect_timeout", "command", "format")}
             merged.update(profiles.get(target) or {})
             return merged
         if target == base_env:
@@ -372,11 +375,21 @@ class CommandPlatformClient(TaskLedgerMixin, clients.PlatformClient):
         return self._receipt(sql, started, extra)
 
     def _raw_execute(self, sql: str, env: Optional[str] = None) -> Dict[str, Any]:
-        if not self._run_argv:
+        # 真机实测（2026-10-07）：argv 只在 __init__ 里读一次，profiles.<env>.command.run
+        # 的覆盖就被静默忽略——P5 声称部署到 prod，实际跑的还是 dev 的 argv（打到 dev 仓库）。
+        # 每次执行按 env 重新解析一遍 argv。
+        argv = self._argv_for(env)
+        if not argv:
             raise clients.ClientError(
                 f"{self.engine} 命令执行器未配置：platform.command.run（例如 ['flink','sql','-f','{{file}}']）"
             )
-        return self._execute_argv(self._run_argv, sql, "执行", env=env)
+        return self._execute_argv(argv, sql, "执行", env=env)
+
+    def _argv_for(self, env: Optional[str] = None) -> List[str]:
+        """按环境解析 argv：``platform.command.run`` 与 ``profiles.<env>.command.run``。"""
+        p = self._effective_config(env)
+        command = p.get("command") or (self.config.get("platform") or {}).get("command") or {}
+        return list(command.get("run") or [])
 
     def _receipt(self, sql: str, started: float, extra: Dict[str, Any]) -> Dict[str, Any]:
         return {
@@ -400,10 +413,13 @@ class CommandPlatformClient(TaskLedgerMixin, clients.PlatformClient):
     def check_grammar(self, sql: str) -> Dict[str, Any]:
         if not sql or not str(sql).strip():
             return {"valid": False, "errors": ["空 SQL"]}
-        if not self._check_argv:
+        base_command = (self._effective_config(None).get("command")
+                        or (self.config.get("platform") or {}).get("command") or {})
+        check_argv = list(base_command.get("check") or [])
+        if not check_argv:
             return {"valid": True, "errors": [], "note": "命令模式未配置 check 命令，语法在真实执行时校验"}
         try:
-            self._execute_argv(self._check_argv, sql, "语法检查", env=None)
+            self._execute_argv(check_argv, sql, "语法检查", env=None)
         except clients.ClientError as exc:
             return {"valid": False, "errors": [str(exc)]}
         return {"valid": True, "errors": []}

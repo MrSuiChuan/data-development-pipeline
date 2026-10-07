@@ -100,7 +100,13 @@ def verify_latest_comment(comments: list, anchor_prefix: str = "数据概要设�
             finals.append((int(m.group(1)), comment))
     if not finals:
         return None
-    _, latest = max(finals, key=lambda pair: pair[0])
+    # 同一个版本号可能被贴两次（重跑 SDS 会再贴一条 v1）。真平台的评论列表按时间序返回，
+    # "最新终版"应当是**最后一条**同版本评论，而不是第一（max 平局取首个会验到旧的那条——
+    # 2026-10-07 在真 tracker 上实测踩到）。
+    best_version, latest = -1, finals[0][1]
+    for version, comment in finals:
+        if version >= best_version:
+            best_version, latest = version, comment
     text = str(latest.get("content_md", ""))
     ok = (
         "```json" in text

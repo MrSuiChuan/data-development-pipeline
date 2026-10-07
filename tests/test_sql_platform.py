@@ -52,6 +52,26 @@ class SqlAdapterTests(unittest.TestCase):
         cfg["platform"] = platform
         context.write_json(context.config_path(self.root), cfg)
 
+    def test_profile_command_override_is_used_per_env(self) -> None:
+        """真机实测（2026-10-07）：argv 只在 __init__ 读一次 → P5 声称部署 prod 实际跑 dev。
+
+        `profiles.prod.command.run` 必须在该环境执行时生效；不写 command 的 profile 要回落到顶层 command。
+        """
+        self._write_config({
+            "kind": "flink", "base_env": "dev", "database": "ddp_dev",
+            "command": {"engine": "flink", "run": ["bash", "-lc", "dev-runner {file}"]},
+            "profiles": {
+                "prod": {"database": "ddp_prod",
+                         "command": {"engine": "flink", "run": ["bash", "-lc", "prod-runner {file}"]}},
+                "staging": {"database": "ddp_stg"},
+            },
+        })
+        client = RecordingCommandClient(context.load_config(self.root), self.root)
+        self.assertEqual(client._argv_for("dev"), ["bash", "-lc", "dev-runner {file}"])
+        self.assertIn("prod-runner", " ".join(client._argv_for("prod")))
+        self.assertEqual(client._argv_for("staging"), ["bash", "-lc", "dev-runner {file}"],
+                         "profile 没写 command 时应回落到顶层 command")
+
     def test_make_platform_dispatch_mysql_family(self) -> None:
         for kind in ("mysql", "doris", "starrocks", "tidb", "oceanbase", "generic-sql"):
             self._write_config({"kind": kind, "host": "h", "database": "d"})
