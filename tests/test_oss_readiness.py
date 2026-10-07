@@ -40,7 +40,11 @@ COMMUNITY_FILES = (
     ".github/ISSUE_TEMPLATE/config.yml",
     ".github/ISSUE_TEMPLATE/bug_report.md",
     ".github/ISSUE_TEMPLATE/feature_request.md",
+    ".github/ISSUE_TEMPLATE/config-help.md",
     ".github/PULL_REQUEST_TEMPLATE.md",
+    # 2026-10-07 补齐（与另两个插件同一口径）：术语表与开源就绪审计报告
+    "docs/glossary.md",
+    "docs/apache-readiness-audit.md",
 )
 
 # 本机跑真引擎联调会生成、但绝不能进仓库的路径

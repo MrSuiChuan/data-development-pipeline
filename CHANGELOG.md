@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Added（真跑驱动脚本入库：tools/live，CLOSE-011）
+
+18 份 `TEST-REPORT-*.md` 之前只有"现场"，没有可复跑的驱动——脚本都躺在 `.tmp`（gitignored）。
+现在把验证过的驱动平移进 `tools/live/`（22 个脚本 + README 索引），并做了三件事：
+
+- 路径全部参数化：仓库根由脚本位置推导（`DDP_REPO` 可覆盖），工作目录默认 `$REPO/.tmp/live`
+  （`DDP_LIVE_WORK` 可覆盖），引擎目录用 `DORIS_HOME` / `FLINK_HOME` / `PRESTO_HOME` / `DDP_JAVA17` / `DDP_PYLIB`；
+- README 里带"kind → 脚本 → 依赖 → 报告"索引，外加一张**取材来源表**（本网络实测能用的下载源：
+  Doris 的 OSS 桶、dlcdn、华为云 Maven 镜像、`docker.1panel.live` 等）；
+- 防回归用例 `tests/test_live_recipes.py`：脚本必须写进 README 索引、**不许带本机绝对路径**
+  （`/mnt/c/Users/...`、`C:\Users\...`、`/home/<name>/`）、行尾必须是 LF、POSIX 上还要过 `bash -n`。
+
+平移时真的踩到两个坑，顺手写成纪律：Windows 上写文件默认 CRLF → bash 直接语法错（移植脚本改成 LF）；
+端口/镜像名散在各脚本里 → 统一在 README 索引里点名。落地后用一个引擎端到端复跑验证过
+（`chain_generic_sql.sh` → `FAIL=0`）。
+
 ## [1.3.0] — 2026-10-07
 
 **主题：把"支持主流大数据组件"从声明变成现场。** 从 1.2.2 到现在，矩阵里除 OceanBase 外所有能在本地

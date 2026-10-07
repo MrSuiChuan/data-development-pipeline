@@ -310,6 +310,8 @@ SessionStart 提示。
 - [docs/REPRODUCTION-NOTES.md](docs/REPRODUCTION-NOTES.md)：连接器契约 + 已知边界与局限。
 - [docs/engines/README.md](docs/engines/README.md)：引擎接入矩阵（family/dialect/必填键/证据级别/验证状态）
   与逐引擎 playbook（Hive、Spark、ClickHouse、Trino、PostgreSQL、MaxCompute）。
+- [docs/glossary.md](docs/glossary.md)：术语表（阶段、出口门、SDS、八条硬规则、机器资产、留证…）。
+- [docs/apache-readiness-audit.md](docs/apache-readiness-audit.md)：按 Apache 标准做的开源就绪审计（四维度逐条）。
 
 ## 遇到 X 看哪个文件
 
@@ -322,6 +324,8 @@ SessionStart 提示。
 | 怎么相处、遇到骚扰找谁 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
 | 安全漏洞（**不要开公开 issue**） | [SECURITY.md](SECURITY.md) |
 | 许可与第三方依赖边界 | [LICENSE](LICENSE)、[NOTICE](NOTICE) |
+| 某个词在这里是什么意思 | [docs/glossary.md](docs/glossary.md) |
+| 这次开源验收的结论 | [docs/apache-readiness-audit.md](docs/apache-readiness-audit.md) |
 
 ## License
 
