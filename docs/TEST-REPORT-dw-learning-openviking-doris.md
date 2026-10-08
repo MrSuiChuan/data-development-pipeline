@@ -197,6 +197,32 @@ python3 engine/ddp.py --root …/dw-learning-live start
 | `kb read --uri …/dwd_trade_order_detail_inc.md` | 返回完整 9 章节（字段语义表含 `split_total_amount DECIMAL(16,2) 最终价格分摊`） |
 | `sql check --dialect doris` | 正常返回规则结果（本样例报 `WARN rule 15：建议加 -- table 注解`） |
 
+### 3.1 一个必须先说的前提：live 模式下 tracker 一定是外部 CLI
+
+`mode=live` 时 `make_tracker()` **只会**返回 `LiveTrackerClient`，没有回落到 mock 的分支，
+所以 `cli.tracker` 必须指向一个真实命令，否则第一步建单就会报
+`找不到 CLI: tracker（请先运行 /setup 或配置 .data-dev/config.json cli.tracker）`。
+
+仓库里为此准备了官方替身 `tools/live/tracker_stub.py`（"任务单系统 JSON CLI"的最小实现，
+契约见 `docs/REPRODUCTION-NOTES.md` 1.1）。本工程把**它复制到工程目录**再指过去，
+这样替身的状态文件落在工程里，不会把插件仓库弄脏：
+
+```json
+{"cli": {"tracker": ["python3",
+         "~\\Documents\\ChatGPT\\dw-learning-live\\tools\\tracker_stub.py"]}}
+```
+
+建单实测（8 条准入门全过，`quality: []`）：
+
+```
+T-0001  【数据需求】Doris 自测：按天汇总订单明细   类型=数据任务   状态=已提交
+status → phase 0  submitted(已提交/待SDS)
+```
+
+> 注意：这是**替身**，不是真实工单系统。要接真实工单系统，把 `cli.tracker` 换成对应 CLI 即可，
+> 平台侧（Doris）与知识侧（OpenViking）都是真的。
+> 另外两条准入门的实测：描述 <100 字符会被规则 8 拦、缺日期会被规则 7 拦——都是正常拦截，不是故障。
+
 ---
 
 ## 4. 发现的缺陷与摩擦点
