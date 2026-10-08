@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### Added（接真实 OpenViking：数开插件真召回 + 记忆插件真发布 + 端到端，OV 系列）
+
+用户给了真实 OpenViking（`http://<OPENVIKING_HOST>:1933`）与本地 API Key 文件，这一轮把知识通道从 mock 换成真实远端
+（语料仍是 data-warehouse-learning）。报告：[docs/TEST-REPORT-openviking-live.md](docs/TEST-REPORT-openviking-live.md)，
+台账 `goal#corpus-e2e-openviking`（`OV-001…OV-006`）。
+
+- **数开插件真召回**：`knowledge.kind=http` + `api_key_file` → 业务词与表名都命中远端内容（远端已有 trade 域知识）；
+  越界前缀（`file:///…`、`viking://other/…`）与"密钥文件不存在"两条负例都按预期被拒，不静默降级；
+- **记忆插件真发布**：开启 `ov.remote_enabled` 后把语料生成的 `domains/order/**`（12 个对象）推上 OpenViking，
+  回头用数开插件检索到同一批 URI（内容一致）；真实远端发布成功（kb-v5 / git e33ddca）；
+- **端到端**：语料 DDL → 记忆插件生成 → OpenViking → 数开插件 `kb read` 读到正文；
+- **回归**：全语料复跑 236/626 份，数字与上一轮一致；三条已修规则（unbalanced / target / partition_hint）仍为 0 命中。
+
+**发现的缺陷（在记忆插件仓库里，本报告如实记录、未改其代码）**：`publish` **成功时不回报远端同步结果**——
+`ov.remote_enabled=false`（只提 git）与 `true`（真上云）返回结构完全一样，只有远端*失败*才返回 `gate: ov_remote_sync`；
+mock 模式下容易把"只提交了 git"误判成"已发布到云"。建议成功时也带 `remote: {pushed, verified, skipped}`。
+
+顺带两个摩擦点：`ov-check` 只探 `GET /health`（不校验写权限）；远端写入没有一键回滚（本轮新增的 `domains/order/**`
+如需清除请在 OpenViking 侧操作，`trade` 域未改动）。密钥只以 `api_key_file` 路径出现在配置里，任何产物不含密钥内容。
+
 ### Added（拿真实数仓仓库当语料：两插件端到端功能测试，LR 系列）
 
 用 [data-warehouse-learning](https://github.com/MrSuiChuan/data-warehouse-learning)（电商数仓实战，
