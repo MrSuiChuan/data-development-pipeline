@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+### Added（整仓知识入库 + 本地 Doris 真跑，DW 系列）
+
+把 `data-warehouse-learning` 整个仓库录进真实 OpenViking，并在本机把 Doris 起起来供自测。
+报告：[docs/TEST-REPORT-dw-learning-openviking-doris.md](docs/TEST-REPORT-dw-learning-openviking-doris.md)，
+台账 `goal#dw-learning-ingest-doris`（`DW-001…DW-004`）。本轮**没有源码改动**，现场脚本在 `.tmp/dw/`。
+
+- **整仓入库**：872 份 SQL → 195 张逻辑表（ods 47 / dwd 50 / dws 50 / ads 40 / dim 8，2373 列）
+  → 195 篇表文档 + navigation + index → `publish` 版本 `kb-v8`（202 个 URI，`ov_sync=remote`）；
+  **逐字节回读核对 201/201 一致**，远端 `tables/` 用 `fs/ls` 数出来正好 195。语义检索按业务词
+  （商品/支付/退款/秒杀/用户拉新）都能命中对应真实表文档。
+- **本地 Doris 4.1.4.1**：FE master + BE 均 `Alive: true`，端口 9030，库 `ddp_dev`；数开插件
+  `platform run-sql` 返回 `SUCCESS`，`live_probe` 读回 `(1,1.50) (2,2.50)`。
+- **自测工程就绪**：`dw-learning-live` 已配好 `platform.kind=doris` + 知识通道指向
+  `viking://resources/domains/dw-learning/`，`platform doctor` 通过。
+
+**踩到并定性的三个坑**（都在环境侧，不在本插件代码里）：
+
+1. 记忆插件 `ov.wait` 缺省 `true` 时，一次 `content/write` 要 **19.1 s**（实测），`wait=false` 只要
+   **0.14 s** 且写完立刻可 `content/read` 回读。202 个对象按 `true` 跑，51 分钟只推上去 64 个，
+   看起来像卡死；改 `false` 后 2 分 23 秒推完，逐字节校验仍 100% 一致。
+2. 记忆插件远端客户端没有删除能力（真实接口是 `DELETE /api/v1/fs?uri=…`，uri 走 query、删目录要
+   `recursive=true`），一次误入库没法用插件自回滚；`publish` 也没有进度输出。
+3. `fs/stat` 的 `count` 字段不可用于完整性判断：195 个文件的目录它只报 60。
+
+**本地 Doris 起不来的根因**（写进报告第 2 节）：`priority_networks` 未配时 Doris 会挑到 WSL 的
+`br-*` 网桥地址，且**每次启动挑到的都不一样**（BDB 日志里依次是 `172.22/23/24.0.1`），
+而 BDB 组里登记的仍是首次启动那个地址，选举永远完不成 → FE 卡在 `waitCatalogToReady`、9030 连不上。
+钉到 `eth0` 并重建元数据后正常。另有两个坑：内存不足时 BE 直接 `MEM_ALLOC_FAILED`（回收了约 2 GB
+无人管理的孤儿 Flink session，可用内存 167 MB → 1.86 GB），以及 Doris 4.x 里连 `SELECT 1` 都要 BE，
+不能用它当 FE 就绪探针（改用 `SHOW FRONTENDS`）。
+
+**如实声明**：195 张表只进了知识库，**没有**灌进 Doris（Doris 里只有冒烟表）；本地 Doris 是一次性
+环境，WSL 重启导致 `eth0` 地址变化后需 `fix_and_start_doris.sh --reset` 恢复（旧元数据挪到
+`doris-meta.bak-<时间戳>`，可回滚文件但不等于数据还在）；<OTHER-PROJECT> 的四个容器全程未改动。
+密钥只以 `api_key_file` 路径出现在配置里。
+
 ### Added（接真实 OpenViking：数开插件真召回 + 记忆插件真发布 + 端到端，OV 系列）
 
 用户给了真实 OpenViking（`http://<OPENVIKING_HOST>:1933`）与本地 API Key 文件，这一轮把知识通道从 mock 换成真实远端
