@@ -5,7 +5,7 @@
 | 项 | 值 |
 | --- | --- |
 | OpenViking | `http://<OPENVIKING_HOST>:1933`（uvicorn，`GET /` → 302/405；服务在，不是空壳） |
-| API Key | `~\.openviking\api.key`（110 B；**只以文件路径出现在配置里，内容不进任何产物**） |
+| API Key | `~/.openviking/api.key`（110 B；**只以文件路径出现在配置里，内容不进任何产物**） |
 | 语料 | `MrSuiChuan/data-warehouse-learning`（872 份 SQL，739 份含 `CREATE TABLE`） |
 | 被测 | 离线数开插件 `data-development-plugin` v1.3.0+；记忆插件 `knowledge-base-plugin` 1.2.2 |
 | 日期 | 2026-10-08 ｜ 台账 `goal#corpus-e2e-openviking`（`OV-001…OV-006`） |
@@ -139,5 +139,5 @@ bash .tmp/ov/ov003.sh && bash .tmp/ov/ov003b.sh
 bash .tmp/ov/ov004-005.sh
 ```
 
-密钥：只放在 `~\.openviking\api.key`，配置里写 `api_key_file` 路径；
+密钥：只放在 `~/.openviking/api.key`，配置里写 `api_key_file` 路径；
 本报告与本轮所有产物都不含密钥内容。

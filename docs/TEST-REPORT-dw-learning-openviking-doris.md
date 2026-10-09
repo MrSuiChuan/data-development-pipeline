@@ -5,7 +5,7 @@
 | 项 | 值 |
 | --- | --- |
 | OpenViking | `http://<OPENVIKING_HOST>:1933`（服务端 0.4.x，`/openapi.json` 可读，105 个路径） |
-| API Key | `~\.openviking\api.key`（110 B；**只以文件路径出现在配置里，内容不进任何产物**） |
+| API Key | `~/.openviking/api.key`（110 B；**只以文件路径出现在配置里，内容不进任何产物**） |
 | 语料 | `MrSuiChuan/data-warehouse-learning`（872 份 SQL，739 份含 `CREATE TABLE`）→ 195 张逻辑表、2373 列 |
 | 知识库运行时 | 记忆插件 `knowledge-base-plugin` 1.3.0（`.tmp/lr/kb`），域 `dw-learning` |
 | 平台 | 本地单机 Apache Doris `4.1.4.1-rc02`（WSL Debian，FE + BE 各一） |
@@ -26,7 +26,7 @@
 | Doris 本地起来 | ✅ FE master `Alive: true`，BE `Alive: true`，端口 9030，库 `ddp_dev` |
 | 数开插件真连 Doris | ✅ `platform run-sql` 返回 `status: SUCCESS`，读回 `live_probe = (1,1.50) (2,2.50)` |
 | 数开插件真读知识库 | ✅ `kb read` 读到 `dwd_trade_order_detail_inc` 的 9 章节正文（含字段语义与建表 SQL） |
-| 自测工程就绪 | ✅ `~\Documents\ChatGPT\dw-learning-live` 已配好，可直接 `ddp-submit → ddp-start` |
+| 自测工程就绪 | ✅ `~/dw-learning-live` 已配好，可直接 `ddp-submit → ddp-start` |
 | 未覆盖 | 195 张表**没有**灌进 Doris（只进了知识库）；Doris 里目前只有冒烟表（见第 5 节） |
 
 ---
@@ -157,7 +157,7 @@ mysql -h127.0.0.1 -P9030 -uroot -D ddp_dev -e 'select * from live_probe;'
 
 ## 3. 给你自测用的工程（已配好）
 
-路径 `~\Documents\ChatGPT\dw-learning-live`，`.data-dev/config.json` 关键段：
+路径 `~/dw-learning-live`，`.data-dev/config.json` 关键段：
 
 ```json
 {"platform": {"kind": "doris", "host": "127.0.0.1", "port": 9030, "user": "root",
@@ -290,5 +290,5 @@ bash .tmp/dw/prepare_live_project.sh
 bash .tmp/dw/verify_live_project.sh
 ```
 
-密钥只放在 `~\.openviking\api.key`，配置里写 `api_key_file` 路径；
+密钥只放在 `~/.openviking/api.key`，配置里写 `api_key_file` 路径；
 本报告与本轮所有产物都不含密钥内容。
