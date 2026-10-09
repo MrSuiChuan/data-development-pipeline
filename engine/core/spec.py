@@ -11,18 +11,50 @@ from typing import Any, Dict, Optional
 from . import context
 
 
+def _ticket_identity(req_dir: Path, sds: Dict[str, Any], workitem: Optional[Dict[str, Any]] = None):
+    """工单号与标题：SDS 里没写时，从 tracker 记录与工单目录名兜底。
+
+    真实踩坑（T-0002）：SDS 里通常没有 ticket_id/title 字段，旧实现直接取值渲染，
+    说明书抬头于是变成「# 数据概要设计（?）」、正文写成「- 工单: None ·」。
+    工单号其实就写在路径上（tickets/T-0002），取得到的东西不该渲染成 None。
+    """
+    ticket_id = str(sds.get("ticket_id") or "").strip()
+    title = str(sds.get("title") or "").strip()
+    if isinstance(workitem, dict):
+        ticket_id = ticket_id or str(workitem.get("id") or "").strip()
+        title = title or str(workitem.get("title") or "").strip()
+    return (ticket_id or req_dir.name, title)
+
+
+def spec_fingerprint(sds: Dict[str, Any], body: str) -> str:
+    """口径指纹：覆盖工单正文 + 目标表 + 字段映射 + SQL 验证结论。
+
+    旧实现只哈希 workitem['description_md']，而 tracker 实际存的是 'description' ——
+    取不到就成了空串，ticket_hash 恒等于空串的 sha256（e3b0c44298fc1c14...），
+    且完全不含 SDS 口径内容：改目标表名后 hash 一点不变，准入门第 4 步等于没把关。
+    """
+    payload = {
+        "body": body,
+        "target_table": (sds or {}).get("target_table"),
+        "field_mappings": (sds or {}).get("field_mappings"),
+        "sql_validation": (sds or {}).get("sql_validation"),
+    }
+    return context.sha256_text(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+
+
 def render_sds_spec(req_dir: Path) -> str:
     """Render the four-section SDS specification markdown (确认门用)."""
     sds = context.load_json(req_dir / "sds_design.json") or {}
     target = sds.get("target_table") or {}
     mappings = sds.get("field_mappings") or []
     sql = sds.get("sql_validation") or {}
+    ticket_id, title = _ticket_identity(req_dir, sds, None)
     lines = [
-        f"# 数据概要设计（{sds.get('ticket_id', '?')}）",
+        f"# 数据概要设计（{ticket_id}）",
         "",
         "## 一、需求与结论",
         "",
-        f"- 工单: {sds.get('ticket_id')} · {sds.get('title', '')}",
+        f"- 工单: {ticket_id} · {title}".rstrip(),
         f"- 模式: {sds.get('mode')} · 难度建议: {sds.get('level_suggestion', '-')}",
         f"- 声明来源: {sds.get('declared_source') or '（无，走 generate）'}",
         f"- 知识源: {sds.get('knowledge_source_uri', '-')}",
@@ -122,7 +154,13 @@ def bridge_to_spec(req_dir: Path, workitem: Dict[str, Any]) -> Dict[str, Any]:
     sds = context.load_json(req_dir / "sds_design.json") or {}
     target = sds.get("target_table") or {}
     mappings = sds.get("field_mappings") or []
-    body = str(workitem.get("description_md", "")) if isinstance(workitem, dict) else ""
+    if isinstance(workitem, dict):
+        # tracker 的记录用的是 'description'；'description_md' 只在部分适配器里出现。
+        # 只认前者会导致 body 恒为空串（ticket_hash 变成空串 sha256，见 PF-003）。
+        body = str(workitem.get("description_md") or workitem.get("description") or "")
+    else:
+        body = ""
+    ticket_id, title = _ticket_identity(req_dir, sds, workitem)
     lines = [
         "# requirement_spec.md（P2-P6 统一输入）",
         "",
@@ -134,8 +172,8 @@ def bridge_to_spec(req_dir: Path, workitem: Dict[str, Any]) -> Dict[str, Any]:
         "",
         "## 下半部：桥接自 SDS（机器校验产物，改动须回 P1 重跑）",
         "",
-        f"- ticket: {sds.get('ticket_id')}",
-        f"- title: {sds.get('title', '')}",
+        f"- ticket: {ticket_id}",
+        f"- title: {title}",
         f"- level: {sds.get('level_suggestion', 'L1')}",
         f"- mode: {sds.get('mode')}",
         f"- knowledge_source_uri: {sds.get('knowledge_source_uri', '')}",
@@ -163,7 +201,22 @@ def bridge_to_spec(req_dir: Path, workitem: Dict[str, Any]) -> Dict[str, Any]:
         "",
     ]
     context.write_text(req_dir / "requirement_spec.md", "\n".join(lines))
-    return {"level": sds.get("level_suggestion"), "ticket_hash": context.sha256_text(body)}
+    result: Dict[str, Any] = {
+        "level": sds.get("level_suggestion"),
+        "ticket_hash": spec_fingerprint(sds, body),
+    }
+    warnings = []
+    if not sds.get("level_suggestion"):
+        # 静默返回 level=null 会一路拖到 P2 出口才暴露（实测），这里当场说清楚
+        warnings.append(
+            "sds_design.json 缺 level_suggestion：状态机 level 会是 null，P2 出口会因难度级别缺失而卡住，"
+            "请在 SDS 里补 L1/L2/L3 后重跑 sds bridge"
+        )
+    if not str(target.get("name") or "").strip():
+        warnings.append("sds_design.json 缺 target_table.name：P3 出口无法校验 SDS 目标表是否真的造了")
+    if warnings:
+        result["warnings"] = warnings
+    return result
 
 
 def render_code_diff_html(old_text: str, new_text: str, title: str = "code_diff") -> str:

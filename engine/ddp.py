@@ -274,8 +274,23 @@ def verb_ticket(flags: Dict[str, str]) -> None:
         emit(tracker().comments(tid))
     elif sub == "verify-latest":
         result = spec.verify_latest_comment(tracker().comments(tid))
-        emit({"ok": bool(result and result["verified"]), "result": result})
-        if not (result and result["verified"]):
+        verified = bool(result and result["verified"])
+        # 失败必须说清楚为什么（见 PF-004）：旧实现只回 {"ok": false, "result": null}，
+        # 真实踩到的是锚点没带版本号，却只能靠翻源码才猜得到。
+        if verified:
+            reason = ""
+        elif result is None:
+            reason = (
+                "没有找到锚点为【数据概要设计 vN】的评论：请确认贴单时用了带版本号的锚点"
+                "（如 `--anchor '数据概要设计 v1'`），或先跑 sds build-comment + comment add"
+            )
+        else:
+            reason = (
+                "找到终版评论但内容不完整：需要同时含 ```json 机读块、\"confirmed\": true、"
+                "[已确认] 确认行与四段式标题（## 一、需求与结论）"
+            )
+        emit({"ok": verified, "result": result, "reason": reason})
+        if not verified:
             sys.exit(2)
     else:
         print(__verbs_help())
@@ -794,6 +809,21 @@ def verb_ddl(flags: Dict[str, str]) -> None:
     emit(result)
 
 
+def _is_write_sql(sql_text: str) -> bool:
+    """判断一条 SQL 是不是写类语句（决定 save-evidence 落哪个证据槽）。
+
+    真实踩坑（T-0002）：P4 的测试用例都是只读 SELECT，但旧实现把它们也写进
+    etl_dev_exec.json，覆盖掉 ETL 的回执；随后 P4→P5 出口报 evidence.binding.stale，
+    提示语却写成「过门后改过代码必须重新真跑」——代码一个字没改，排查方向被带偏。
+    """
+    return bool(
+        re.search(
+            r"\b(INSERT|CREATE|ALTER|DROP|TRUNCATE|MERGE|REPLACE|UPDATE|DELETE|LOAD|COPY)\b",
+            str(sql_text or "").upper(),
+        )
+    )
+
+
 def verb_platform(flags: Dict[str, str]) -> None:
     """Mirror the configured data-platform CLI surface so hooks/gates see one vocabulary."""
     sub = flags.get("sub", "") or flags.get("1", "")
@@ -836,7 +866,10 @@ def verb_platform(flags: Dict[str, str]) -> None:
                 "evidence_level": str(result.get("evidence_level") or ""),
                 "engine": str(result.get("engine") or ""),
             }
-            context.write_json(req / "etl_dev_exec.json", evidence)
+            # 只有写类语句才更新 etl 证据槽；只读查询（P4 的测试用例全是 SELECT）
+            # 落独立槽位，避免把 ETL 的回执覆盖掉（见 PF-002）。
+            slot = "etl_dev_exec.json" if _is_write_sql(sql_text) else "query_dev_exec.json"
+            context.write_json(req / slot, evidence)
         emit(result)
     elif sub in ("check-grammar", "check_sql_grammar", "checkSqlGrammar"):
         emit(client.check_grammar(sql_text))

@@ -38,6 +38,21 @@ SDS_REQUIRED_MAPPING_KEYS = (
 )
 
 
+def bare_table_name(name: Any) -> str:
+    """表名归一：去掉库前缀、空白、反引号与大小写差异。
+
+    真实踩坑（T-0002）：SDS 里目标表写成 ``ads.ads_sku_order_num_top3_d``（带库名），
+    而架构交付表清单与 ddl/etl/dp_task 的文件 stem 是裸名 ``ads_sku_order_num_top3_d``，
+    旧代码拿两个字符串直接比，把一份完全正确的设计判成 dev.sds_target_not_built。
+    库名写不写是表达习惯，不是设计分歧，比对前必须归一。
+    """
+    text = str(name or "").strip().lower()
+    if "." in text:
+        text = text.rsplit(".", 1)[-1]
+    # 先按点拆再剥引号：`` `ADS`.`T_X` `` 拆分后第二段还带着反引号，只剥一次两头是不够的
+    return text.strip().strip("`\"[]").strip()
+
+
 @dataclass
 class Issue:
     code: str
@@ -1070,14 +1085,15 @@ def validate_phase3_data_dev(req_dir: Path, state: Dict[str, Any]) -> List[Issue
     # 白捡一条：SDS 的目标表必须真的在交付表里（现有数据，零新增声明）
     sds = context.load_json(req_dir / "sds_design.json")
     if isinstance(sds, dict) and built:
-        sds_target = str((sds.get("target_table") or {}).get("name") or "").strip()
-        if sds_target and sds_target not in built:
+        sds_target = bare_table_name((sds.get("target_table") or {}).get("name"))
+        built_bare = {bare_table_name(name) for name in built}
+        if sds_target and sds_target not in built_bare:
             issues.append(
                 Issue(
                     "dev.sds_target_not_built",
                     3,
                     "FAIL",
-                    f"SDS 目标表 {sds_target} 不在交付表里: {sorted(built)[:5]}",
+                    f"SDS 目标表 {sds_target} 不在交付表里: {sorted(built_bare)[:5]}",
                     file="sds_design.json",
                 )
             )
