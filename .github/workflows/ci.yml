@@ -33,6 +33,11 @@ jobs:
         run: |
           ! rg -n -i "xhdw|alipay|复刻|调研文档|（与原版|见复刻差异" . -g '!.github/**' || exit 1
           ! rg -n "ark-[A-Za-z0-9_-]{20,}|rvk_[A-Za-z0-9_-]{20,}" . -g '!.github/**' || exit 1
+          # 环境指纹（内网网段 / 带用户名的本机绝对路径）。上面两条查"来源敏感词"，这条查"环境指纹"。
+          # 为什么单独有一条：2026-10-09 第一次把仓库推到公开仓库时漏出去的正是这两类，而当时
+          # 上面两条都拦不住 —— 代价是重写全历史 + 强推。有了它，就算忘了跑 tools/publish_public.sh，
+          # 私有仓的 CI 也会先红。
+          - python tools/scan_leaks.py
 
   hooks:
     # 这条 job 存在的唯一理由：hook 层的失败是静默的（启动器不存在 -> 宿主 fail-open

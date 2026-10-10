@@ -96,7 +96,7 @@ setup→snapshot→skeleton→generate→audit→propose→review→publish→re
 - README 里带"kind → 脚本 → 依赖 → 报告"索引，外加一张**取材来源表**（本网络实测能用的下载源：
   Doris 的 OSS 桶、dlcdn、华为云 Maven 镜像、`docker.1panel.live` 等）；
 - 防回归用例 `tests/test_live_recipes.py`：脚本必须写进 README 索引、**不许带本机绝对路径**
-  （`/mnt/c/Users/...`、`C:\Users\...`、`/home/<name>/`）、行尾必须是 LF、POSIX 上还要过 `bash -n`。
+  （Windows 用户目录、WSL 挂载点里的用户路径、Linux 家目录都不行）、行尾必须是 LF、POSIX 上还要过 `bash -n`。
 
 平移时真的踩到两个坑，顺手写成纪律：Windows 上写文件默认 CRLF → bash 直接语法错（移植脚本改成 LF）；
 端口/镜像名散在各脚本里 → 统一在 README 索引里点名。落地后用一个引擎端到端复跑验证过
