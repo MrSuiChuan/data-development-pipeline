@@ -37,7 +37,7 @@ jobs:
           # 为什么单独有一条：2026-10-09 第一次把仓库推到公开仓库时漏出去的正是这两类，而当时
           # 上面两条都拦不住 —— 代价是重写全历史 + 强推。有了它，就算忘了跑 tools/publish_public.sh，
           # 私有仓的 CI 也会先红。
-          - python tools/scan_leaks.py
+          python tools/scan_leaks.py
 
   hooks:
     # 这条 job 存在的唯一理由：hook 层的失败是静默的（启动器不存在 -> 宿主 fail-open
