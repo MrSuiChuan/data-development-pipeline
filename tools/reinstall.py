@@ -31,7 +31,24 @@ for _stream in (sys.stdout, sys.stderr):
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / ".codex-plugin" / "plugin.json"
 MARKETPLACE = Path.home() / ".agents" / "plugins" / "marketplace.json"
+CACHE_ROOT = Path.home() / ".codex" / "plugins" / "cache"
 CACHEBUSTER_RE = re.compile(r"\+(?:codex)\.[a-z0-9-]+$", re.IGNORECASE)
+# 宿主会把 commands/ 迁移成一份 source-command-<name> 技能放在这里。本插件已自带同功能的
+# ddp-* 技能（skills/ 由同一批 commands/ 生成），两份同时在场只会让技能选择变模糊
+# （实测：一个会话里 ddp-advance 与 source-command-advance 同时出现在可用技能列表里）。
+MIGRATED_SKILLS_DIR = ".codex-plugin/migrated-command-skills"
+
+
+def drop_migrated_skills(version: str, plugin_name: str) -> list:
+    """重装后清掉宿主生成的迁移副本，避免同一功能两份技能同时被加载。"""
+    removed: list = []
+    for cache_dir in CACHE_ROOT.glob(f"*/{plugin_name}/{version}"):
+        stale = cache_dir / MIGRATED_SKILLS_DIR
+        if not stale.is_dir():
+            continue
+        shutil.rmtree(stale)
+        removed.append(str(stale))
+    return removed
 
 
 def new_version(current: str, token: str) -> str:
@@ -139,6 +156,12 @@ def main() -> int:
     if proc.returncode != 0:
         print((proc.stderr or "").strip(), file=sys.stderr)
         return proc.returncode
+
+    removed = drop_migrated_skills(target, plugin_name)
+    if removed:
+        print("已清掉宿主生成的迁移技能副本（与自带 ddp-* 技能重复）：")
+        for item in removed:
+            print(f"  - {item}")
 
     print()
     print("装好了。**新开一个线程**再用，宿主只在新会话里加载新版本。")

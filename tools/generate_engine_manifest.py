@@ -40,6 +40,7 @@ def main() -> int:
     (ENGINE / ".engine-manifest.json").write_text(
         json.dumps({"schema_version": 1, "files": manifest}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
+        newline="\n",
     )
     print(f"manifest written: {len(manifest)} files")
     return 0

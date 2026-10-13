@@ -72,7 +72,10 @@ def read(path: Path) -> str:
 
 def write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    # newline="\n" 必须显式给：Windows 下文本模式会把 \n 翻译成 \r\n，生成物与仓库里
+    # 已按 `.gitattributes`（`* text=auto eol=lf`）提交的字节就不一致，于是出现
+    # "13 个文件显示已改、`git diff` 却是空的"这种纯行尾噪声（实测踩过）。
+    path.write_text(text, encoding="utf-8", newline="\n")
     print("wrote", path.relative_to(ROOT).as_posix())
 
 
