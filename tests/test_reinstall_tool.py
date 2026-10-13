@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import stat
 import sys
 import tempfile
 import unittest
@@ -76,6 +78,52 @@ class DropMigratedSkillsTests(unittest.TestCase):
             (self.cache / "personal" / "data-development-plugin" / "1.3.0+codex.old" / reinstall.MIGRATED_SKILLS_DIR).is_dir(),
             "只清本次装的那一版",
         )
+
+
+class PruneCacheArtifactsTests(unittest.TestCase):
+    """宿主安装拷的是整棵工作树，本机产物得从缓存副本里清掉——但只清缓存，不动源码仓库。"""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.cache = Path(self._tmp.name)
+        self._original = reinstall.CACHE_ROOT
+        reinstall.CACHE_ROOT = self.cache
+        root = self.cache / "personal" / "data-development-plugin" / "1.3.0+codex.tok"
+        (root / ".tmp").mkdir(parents=True)
+        (root / ".tmp" / "probe.bin").write_bytes(b"x" * 2048)
+        (root / "logs").mkdir(parents=True)
+        (root / "logs" / "run.log").write_text("log", encoding="utf-8")
+        (root / "derby.log").write_text("derby", encoding="utf-8")
+        (root / "engine").mkdir(parents=True)
+        (root / "engine" / "ddp.py").write_text("# publish surface", encoding="utf-8")
+        self.root = root
+
+    def tearDown(self) -> None:
+        reinstall.CACHE_ROOT = self._original
+        self._tmp.cleanup()
+
+    def test_prunes_local_artifacts_and_keeps_the_publish_surface(self) -> None:
+        pruned, freed = reinstall.prune_cache_artifacts("1.3.0+codex.tok", "data-development-plugin")
+        self.assertEqual(len(pruned), 3, pruned)  # .tmp + logs + derby.log
+        self.assertGreater(freed, 2000)
+        self.assertFalse((self.root / "logs").exists())
+        self.assertFalse((self.root / "derby.log").exists())
+        # 仓库里同名目录不受影响（只有缓存副本被清）
+        self.assertTrue((self.root / "engine" / "ddp.py").is_file(), "发布面不能被删")
+
+    def test_prunes_read_only_files_too(self) -> None:
+        """实测踩过：.tmp/clonecheck-* 里是嵌套 git 克隆，.git/objects/** 只读，
+        rmtree 直接 WinError 5，把整次重装打断。清理必须能处理只读文件。"""
+        nested = self.root / ".tmp" / "clonecheck-1" / ".git" / "objects" / "ab"
+        nested.mkdir(parents=True)
+        loose = nested / "cdef"
+        loose.write_bytes(b"object")
+        os.chmod(loose, stat.S_IREAD)
+        self.assertFalse(os.access(loose, os.W_OK), "前提：文件确实是只读的")
+
+        pruned, _freed = reinstall.prune_cache_artifacts("1.3.0+codex.tok", "data-development-plugin")
+
+        self.assertFalse((self.root / ".tmp").exists(), pruned)
 
 
 if __name__ == "__main__":

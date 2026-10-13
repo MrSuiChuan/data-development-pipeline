@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -37,6 +39,20 @@ CACHEBUSTER_RE = re.compile(r"\+(?:codex)\.[a-z0-9-]+$", re.IGNORECASE)
 # ddp-* 技能（skills/ 由同一批 commands/ 生成），两份同时在场只会让技能选择变模糊
 # （实测：一个会话里 ddp-advance 与 source-command-advance 同时出现在可用技能列表里）。
 MIGRATED_SKILLS_DIR = ".codex-plugin/migrated-command-skills"
+# 宿主安装是**整棵工作树**拷贝（不是 git 的发布面），所以 .gitignore 排除的本机产物
+# 会一起进缓存：实测 ddp 缓存 39.2 MB（.tmp 27 MB、.awr 2 MB、logs 0.9 MB、
+# metastore_db + derby.log），而插件的发布面本身不到 2 MB。这些目录插件运行时一个都不用——
+# 真正要用的是 `<用户项目>/.data-dev/`，由 /setup 在用户工程里现建。
+CACHE_LOCAL_ARTIFACTS = (
+    ".tmp",
+    ".awr",
+    "logs",
+    "metastore_db",
+    ".pytest_cache",
+    "derby.log",
+    "spark-warehouse",
+    "warehouse",
+)
 
 
 def drop_migrated_skills(version: str, plugin_name: str) -> list:
@@ -46,9 +62,48 @@ def drop_migrated_skills(version: str, plugin_name: str) -> list:
         stale = cache_dir / MIGRATED_SKILLS_DIR
         if not stale.is_dir():
             continue
-        shutil.rmtree(stale)
+        _rmtree(stale)
         removed.append(str(stale))
     return removed
+
+
+def _force_remove(function, path, _exc) -> None:
+    """Windows 上只读文件会让 rmtree 报 WinError 5：先加写权限再删。
+
+    实测来源：`.tmp/clonecheck-*` 是嵌套的 git 克隆，`.git/objects/**` 全是只读，
+    第一次跑 prune 就死在 PermissionError 上（对象文件删不掉，整次重装中断）。
+    """
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        function(path)
+    except OSError:
+        pass
+
+
+def _rmtree(target: Path) -> None:
+    kwargs = {"onexc": _force_remove} if sys.version_info >= (3, 12) else {"onerror": _force_remove}
+    shutil.rmtree(target, **kwargs)
+
+
+def prune_cache_artifacts(version: str, plugin_name: str) -> tuple:
+    """把本机产物从**刚装进缓存的那份副本**里删掉，只保留插件的发布面。
+
+    只动缓存副本，不动源码仓库：仓库里的 .tmp/ 是台账引用过的实验留档，删它等于毁证。
+    """
+    removed: list = []
+    freed = 0
+    for cache_dir in CACHE_ROOT.glob(f"*/{plugin_name}/{version}"):
+        for name in CACHE_LOCAL_ARTIFACTS:
+            target = cache_dir / name
+            if target.is_dir():
+                freed += sum(item.stat().st_size for item in target.rglob("*") if item.is_file())
+                _rmtree(target)
+                removed.append(str(target))
+            elif target.is_file():
+                freed += target.stat().st_size
+                target.unlink()
+                removed.append(str(target))
+    return removed, freed
 
 
 def new_version(current: str, token: str) -> str:
@@ -161,6 +216,12 @@ def main() -> int:
     if removed:
         print("已清掉宿主生成的迁移技能副本（与自带 ddp-* 技能重复）：")
         for item in removed:
+            print(f"  - {item}")
+
+    pruned, freed = prune_cache_artifacts(target, plugin_name)
+    if pruned:
+        print(f"已从缓存副本清掉本机产物（发布面之外，释放 {freed / 1024 / 1024:.1f} MB）：")
+        for item in pruned:
             print(f"  - {item}")
 
     print()
