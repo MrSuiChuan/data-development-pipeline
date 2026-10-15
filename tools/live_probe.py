@@ -97,7 +97,9 @@ def main() -> int:
         if "write" in step:
             target = Path(step["write"]["path"])
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(step["write"]["content"], encoding="utf-8", newline="\n")
+            # 同 build_codex_surface：write_text(newline=) 是 3.10+，本仓库下限是 3.9
+            with open(target, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(step["write"]["content"])
             print(f"=== {step['name']}")
             continue
         print(f"=== {step['name']}")

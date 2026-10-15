@@ -72,10 +72,17 @@ def read(path: Path) -> str:
 
 def write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    # newline="\n" 必须显式给：Windows 下文本模式会把 \n 翻译成 \r\n，生成物与仓库里
-    # 已按 `.gitattributes`（`* text=auto eol=lf`）提交的字节就不一致，于是出现
+    # 固定 LF：Windows 下文本模式会把 \n 翻译成 \r\n，生成物与仓库里已按
+    # `.gitattributes`（`* text=auto eol=lf`）提交的字节就不一致，于是出现
     # "13 个文件显示已改、`git diff` 却是空的"这种纯行尾噪声（实测踩过）。
-    path.write_text(text, encoding="utf-8", newline="\n")
+    #
+    # 用 open() 而不是 `Path.write_text(..., newline=...)`：后者是 Python 3.10 才有的
+    # 参数，本仓库声明支持 3.9（README + CI 矩阵），3.9 上会
+    # `TypeError: write_text() got an unexpected keyword argument 'newline'` ——
+    # 生成器半途退出，CI 的「生成物必须与仓库一致」步骤因此变红，而 3.12 腿是绿的
+    # （2026-10-15 公开仓 run 121a8bc 实测）。open() 的 newline 从 3.6 起就有。
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
     print("wrote", path.relative_to(ROOT).as_posix())
 
 

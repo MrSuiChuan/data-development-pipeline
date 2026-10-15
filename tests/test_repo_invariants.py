@@ -122,6 +122,35 @@ class PythonFloorTests(unittest.TestCase):
             f"以下文件用了 Python {floor[0]}.{floor[1]} 解析不了的语法：\n  " + "\n  ".join(failures),
         )
 
+    def test_sources_avoid_apis_newer_than_the_declared_floor(self) -> None:
+        """下限只查语法不够：3.10 才有的**参数**在 3.9 上照样 TypeError。
+
+        现场（2026-10-15，公开仓 data-development-pipeline run 121a8bc）：
+        `Path.write_text(..., newline=...)` 是 Python 3.10 新增的参数，3.9 上生成器
+        半途抛 TypeError，CI 的「生成物必须与仓库一致」步骤因此变红，而 3.12 腿与
+        本地全绿——这一类只有下限版本（或这条静态守卫）能照出来，语法检查看不到。
+        """
+        floor = readme_python_floor()
+        # (最低可用版本, 说明, 属性名, 关键字参数名)；下限升上去以后这条守卫要一起更新
+        banned = (
+            ((3, 10), "Path.write_text(..., newline=...)", "write_text", "newline"),
+        )
+        active = [item for item in banned if item[0] > floor]
+        self.assertTrue(active, "下限已不低于清单里的最低版本：请连同守卫清单一起更新")
+        hits = []
+        for path in source_files():
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            except SyntaxError:
+                continue  # 语法问题由上一个测试报，不在这里重复
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                    continue
+                for _minimum, label, attr, kwarg in active:
+                    if node.func.attr == attr and any(kw.arg == kwarg for kw in node.keywords):
+                        hits.append(f"{path.relative_to(ROOT_REPO).as_posix()}:{node.lineno} 用了 {label}")
+        self.assertEqual([], hits, "下限 Python 上会直接报错：\n  " + "\n  ".join(hits))
+
 
 class VersionConsistencyTests(unittest.TestCase):
     def test_base_version_agrees_across_manifests_and_changelog(self) -> None:

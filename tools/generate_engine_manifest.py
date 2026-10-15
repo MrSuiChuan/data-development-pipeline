@@ -37,11 +37,11 @@ def build_manifest() -> dict:
 
 def main() -> int:
     manifest = build_manifest()
-    (ENGINE / ".engine-manifest.json").write_text(
-        json.dumps({"schema_version": 1, "files": manifest}, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    # 固定 LF（理由同 build_codex_surface.write）：`Path.write_text(..., newline=...)`
+    # 是 Python 3.10+ 参数，3.9（本仓库声明的下限）上直接 TypeError，CI 的
+    # 「生成物必须与仓库一致」步骤会因此变红（2026-10-15 实测）。
+    with open(ENGINE / ".engine-manifest.json", "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps({"schema_version": 1, "files": manifest}, ensure_ascii=False, indent=2) + "\n")
     print(f"manifest written: {len(manifest)} files")
     return 0
 
