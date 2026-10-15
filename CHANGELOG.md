@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Fixed（插件测试跑出来的一处真问题，2026-10-15）
+
+用一份 132 条用例的测试实验台逐条跑本插件（G 18 / D 72 / K 38 / X 7，含与记忆插件的跨插件契约），
+只有一处不通过：
+
+- **工单没有本地状态时，面向工单的动词抛 Python 栈**（`engine/ddp.py`）：工单目录不存在时
+  `ddp.py status --ticket T-0001` 直接 `FileNotFoundError` 抛栈，`report` 同样；宿主里看到的
+  是一段 traceback，而不是「先 /submit」。同一类情形 `sds` 早就有干净版本，现在把
+  `status / report / advance / ctx / evidence / finish / diff / baseline / deploy / rollback /
+  semantic` 统一到同一条门：`require_pipeline()` 给 JSON 载荷（`gate=ticket_not_initialized`）
+  + 退出码 2。`diff` 例外：它先看线上基准，无基准时给「新表场景可跳过」，但同样不再抛栈。
+
+回归用例：`tests/test_pipeline_fixes.py::MissingTicketGuardTests`（9 个动词逐个断言不抛栈、
+退出码与门控键一致）。
+
+台账与原始输出另存（测试实验台 `ddp-testlab/`，含每条用例的命令行、stdout、hook 载荷）。
+
 ### Added（整仓知识入库 + 本地 Doris 真跑，DW 系列）
 
 把 `data-warehouse-learning` 整个仓库录进真实 OpenViking，并在本机把 Doris 起起来供自测。

@@ -175,5 +175,56 @@ class EvidenceSlotTests(unittest.TestCase):
         return bool(module._is_write_sql(sql))
 
 
+class MissingTicketGuardTests(unittest.TestCase):
+    """PF-007：工单没有本地状态时，面向工单的动词要给干净的门控错误，不是 Python 栈。
+
+    现场（2026-10-15 插件测试用例 X-01 / D-31）：`ddp.py status --ticket T-0001` 在工单
+    目录不存在时直接 FileNotFoundError 抛栈——宿主里看到的是一段 traceback，而不是
+    「先 /submit」。`sds` 早就有干净版本，这里把同一形状铺到所有面向工单的动词。
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        (self.root / ".data-dev").mkdir(parents=True, exist_ok=True)
+        _write(self.root / ".data-dev" / "config.json", json.dumps({"mode": "mock"}))
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _run(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(ENGINE / "ddp.py"), *args, "--root", str(self.root)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+
+    def test_ticket_scoped_verbs_fail_cleanly(self) -> None:
+        cases = (
+            ("status",),
+            ("report",),
+            ("advance", "--phase", "2", "--reason", "x"),
+            ("ctx", "list"),
+            ("ctx", "set", "--key", "note", "--value", "v"),
+            ("evidence", "verify"),
+            ("evidence", "selfcheck"),
+            ("finish",),
+        )
+        for args in cases:
+            with self.subTest(args=args):
+                proc = self._run(*args, "--ticket", "T-0001")
+                self.assertNotIn("Traceback", proc.stderr, f"{args} 抛栈了：{proc.stderr}")
+                self.assertEqual(2, proc.returncode, proc.stdout + proc.stderr)
+                payload = json.loads(proc.stdout)
+                self.assertFalse(payload["ok"], payload)
+                self.assertEqual("ticket_not_initialized", payload["gate"], payload)
+
+    def test_diff_without_ticket_fails_cleanly_too(self) -> None:
+        """diff 先看线上基准，没有基准时给的是「无基准」而不是工单门——但同样不许抛栈。"""
+        proc = self._run("diff", "--ticket", "T-0001")
+        self.assertNotIn("Traceback", proc.stderr, proc.stderr)
+        self.assertIn(proc.returncode, (1, 2), proc.stdout + proc.stderr)
+        self.assertIn("基准", proc.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

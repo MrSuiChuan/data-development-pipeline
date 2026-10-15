@@ -212,6 +212,28 @@ def check_gate(command_text: str) -> None:
 # ---------------------------------------------------------------------------
 # verbs
 # ---------------------------------------------------------------------------
+def require_pipeline(tid: str, req: Path) -> "Pipeline":
+    """工单必须已有本地状态，否则给干净的门控错误，而不是 Python 栈。
+
+    实测（2026-10-15 插件测试用例 X-01 / D-31）：工单目录不存在时
+    `status --ticket T-0001` 直接 FileNotFoundError 抛栈，宿主里看到的是一段
+    traceback，而不是「先 /submit」。同一类情形在 sds 里早就有干净版本，
+    这里把所有面向工单的动词统一到同一形状（JSON + 退出码 2）。
+    """
+    pipeline = Pipeline(req)
+    if not pipeline.exists():
+        emit(
+            {
+                "ok": False,
+                "blocked": True,
+                "gate": "ticket_not_initialized",
+                "reason": f"工单 {tid} 没有本地状态（先 /submit 建单，或检查工单号）",
+            }
+        )
+        sys.exit(2)
+    return pipeline
+
+
 def verb_setup(flags: Dict[str, str]) -> None:
     # 没有 --mode 就不改已有配置的 mode（否则在 live 项目里跑一次 setup 会被打回 mock）
     mode = flags.get("mode")
@@ -320,7 +342,7 @@ def verb_sds(flags: Dict[str, str]) -> None:
     sub = flags.get("sub", "")
     tid = ticket(flags)
     req = context.ticket_dir(ROOT, tid)
-    pipeline = Pipeline(req)
+    pipeline = require_pipeline(tid, req)
     if not pipeline.exists():
         print(f"工单 {tid} 没有本地状态（先 /submit）", file=sys.stderr)
         sys.exit(2)
@@ -422,7 +444,7 @@ def verb_sds(flags: Dict[str, str]) -> None:
 def verb_start(flags: Dict[str, str]) -> None:
     tid = ticket(flags)
     req = context.ticket_dir(ROOT, tid)
-    pipeline = Pipeline(req)
+    pipeline = require_pipeline(tid, req)
     steps = []
     # 1. 工单校验
     try:
@@ -505,7 +527,7 @@ def verb_start(flags: Dict[str, str]) -> None:
 def verb_advance(flags: Dict[str, str]) -> None:
     tid = ticket(flags)
     req = context.ticket_dir(ROOT, tid)
-    pipeline = Pipeline(req)
+    pipeline = require_pipeline(tid, req)
     target = int(flags.get("phase", "0") or 0)
     reason = flags.get("reason", "")
     allow_back = bool(flags.get("allow-back"))
@@ -524,7 +546,7 @@ def verb_advance(flags: Dict[str, str]) -> None:
 def verb_status(flags: Dict[str, str]) -> None:
     tid = ticket(flags)
     req = context.ticket_dir(ROOT, tid)
-    pipeline = Pipeline(req)
+    pipeline = require_pipeline(tid, req)
     data = pipeline.summary()
     data["files"] = sorted(p.name for p in req.iterdir() if p.is_file())
     data["config_warns"] = config_security_warns(context.load_config(ROOT))
@@ -544,7 +566,7 @@ def verb_report(flags: Dict[str, str]) -> None:
     """Governance report: timeline + evidence + decisions for a ticket."""
     tid = ticket(flags)
     req = context.ticket_dir(ROOT, tid)
-    pipeline = Pipeline(req)
+    pipeline = require_pipeline(tid, req)
     sds = context.load_json(req / "sds_design.json") or {}
     etl_ev = context.load_json(req / "etl_dev_exec.json") or {}
     ok_etl, etl_reason = validators.execution_evidence_ok(etl_ev, CONFIG.get("limits") or {})
@@ -622,7 +644,7 @@ def verb_report(flags: Dict[str, str]) -> None:
 
 def verb_ctx(flags: Dict[str, str]) -> None:
     tid = ticket(flags)
-    pipeline = Pipeline(context.ticket_dir(ROOT, tid))
+    pipeline = require_pipeline(tid, context.ticket_dir(ROOT, tid))
     sub = flags.get("sub") or flags.get("1", "")
     if sub == "list" or not sub:
         emit(pipeline.state.get("context", {}))
@@ -670,7 +692,7 @@ def verb_evidence(flags: Dict[str, str]) -> None:
     """Set machine evidence keys only after checking real artifacts / confirmations."""
     tid = ticket(flags)
     req = context.ticket_dir(ROOT, tid)
-    pipeline = Pipeline(req)
+    pipeline = require_pipeline(tid, req)
     sub = flags.get("sub") or flags.get("1", "")
     if sub == "verify":
         ev = context.load_json(req / "etl_dev_exec.json") or {}
@@ -954,7 +976,7 @@ def verb_diff(flags: Dict[str, str]) -> None:
                 context.write_text(req / "code_diff.html", html)
     if not changed:
         context.write_text(req / "code_diff.html", spec.render_code_diff_html("", "", title="code_diff: 无差异"))
-    pipeline = Pipeline(req)
+    pipeline = require_pipeline(tid, req)
     pipeline.set_context("code_diff_done", True)
     emit({"ok": True, "changed": changed, "code_diff_html": (req / "code_diff.html").is_file()})
 
@@ -962,7 +984,7 @@ def verb_diff(flags: Dict[str, str]) -> None:
 def verb_review_report(flags: Dict[str, str]) -> None:
     tid = ticket(flags)
     req = context.ticket_dir(ROOT, tid)
-    pipeline = Pipeline(req)
+    pipeline = require_pipeline(tid, req)
     html = spec.render_review_report_html(req, len(pipeline.state.get("autopilot_decisions", [])))
     context.write_text(req / "review_report.html", html)
     emit({"ok": True, "file": "review_report.html"})
@@ -1022,7 +1044,7 @@ def verb_deploy(flags: Dict[str, str]) -> None:
     """Deterministic P5 execution after the three confirmation gates."""
     tid = ticket(flags)
     req = context.ticket_dir(ROOT, tid)
-    pipeline = Pipeline(req)
+    pipeline = require_pipeline(tid, req)
     comment = flags.get("comment", "")
     plan_pre = context.load_json(req / "deploy_plan.json") or {}
     # 真语料测试教训（2026-10-07）：计划缺失时旧代码会"零结果 + ok:true"地空跑，
@@ -1136,7 +1158,7 @@ def verb_rollback(flags: Dict[str, str]) -> None:
     """Execute configured rollback SQL files after a failed/unwanted deployment."""
     tid = ticket(flags)
     req = context.ticket_dir(ROOT, tid)
-    pipeline = Pipeline(req)
+    pipeline = require_pipeline(tid, req)
     comment = flags.get("comment", "")
     if "[已回滚]" not in comment:
         emit({"ok": False, "blocked": True, "gate": "rollback_gate", "reason": "comment 必须含 [已回滚] token（用户确认记录）"})
@@ -1185,7 +1207,7 @@ def verb_rollback(flags: Dict[str, str]) -> None:
 def verb_semantic(flags: Dict[str, str]) -> None:
     tid = ticket(flags)
     req = context.ticket_dir(ROOT, tid)
-    pipeline = Pipeline(req)
+    pipeline = require_pipeline(tid, req)
     scenario = flags.get("scenario", "metric-dev")
     marker = context.read_text(req / "_user_confirmation.md")
     if "[已确认]" not in marker:
@@ -1248,7 +1270,7 @@ def verb_semantic(flags: Dict[str, str]) -> None:
 def verb_finish(flags: Dict[str, str]) -> None:
     tid = ticket(flags)
     req = context.ticket_dir(ROOT, tid)
-    pipeline = Pipeline(context.ticket_dir(ROOT, tid))
+    pipeline = require_pipeline(tid, context.ticket_dir(ROOT, tid))
     enriched = dict(pipeline.state)
     enrich_state(enriched)
     problems = validators.blockers(
