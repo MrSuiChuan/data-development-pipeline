@@ -1,0 +1,133 @@
+{
+  "run_id": "DDP-OFFLINE-INTERACTIVE-20261018",
+  "plugin_version": "1.4.0+codex.20261018104559",
+  "project_root": "C:/Users/wuzongyun/Documents/ChatGPT/data-development-plugin",
+  "plugin_root": "C:/Users/wuzongyun/.codex/plugins/cache/personal/data-development-plugin/1.4.0+codex.20261018104559",
+  "execution_mode": "mock",
+  "run_mode": "interactive",
+  "started_at": "2026-10-18T18:59:46+08:00",
+  "finished_at": null,
+  "confirmation_policy": "interactive gates use clearly marked [TEST-FIXTURE] confirmations for offline regression; negative cases prove missing confirmation blocks; fixture confirmations are not production sign-off",
+  "ticket": null,
+  "entries": [
+    {
+      "id": "TC-01",
+      "phase": "setup",
+      "status": "PENDING",
+      "expected": "engine synced, mock runtime ready, AGENTS.md injected once, hook check rc=0",
+      "actual": "",
+      "evidence": []
+    },
+    {
+      "id": "TC-02",
+      "phase": "submit",
+      "status": "PENDING",
+      "expected": "bad ticket blocked; good ticket created",
+      "actual": "",
+      "evidence": []
+    },
+    {
+      "id": "TC-03",
+      "phase": "preflight",
+      "status": "PENDING",
+      "expected": "start blocked without mode/goal; interactive mode ledger and ticket goal created; start passes",
+      "actual": "",
+      "evidence": []
+    },
+    {
+      "id": "TC-04",
+      "phase": "P1-sds",
+      "status": "PENDING",
+      "expected": "eight rules pass; unconfirmed publish blocked; fixture confirmation publishes v1; bridge writes requirement_spec.md",
+      "actual": "",
+      "evidence": []
+    },
+    {
+      "id": "TC-05",
+      "phase": "P2-architecture",
+      "status": "PENDING",
+      "expected": "architecture doc with machine-readable table list and pipeline html; P2 gate passes",
+      "actual": "",
+      "evidence": []
+    },
+    {
+      "id": "TC-06",
+      "phase": "P3-development",
+      "status": "PENDING",
+      "expected": "DDL->ETL->dp_task; SQL checks pass; mock dev execution produces SUCCESS+query_id; evidence verify passes",
+      "actual": "",
+      "evidence": []
+    },
+    {
+      "id": "TC-07",
+      "phase": "P3-gates",
+      "status": "PENDING",
+      "expected": "code_diff generated; selfcheck passes; registration confirmation recorded; P3 gate passes",
+      "actual": "",
+      "evidence": []
+    },
+    {
+      "id": "TC-08",
+      "phase": "P4-testing",
+      "status": "PENDING",
+      "expected": "test plan confirmed; SUCCESS+query_id runs in ledger; report checkmarks match machine evidence; P4 gate passes",
+      "actual": "",
+      "evidence": []
+    },
+    {
+      "id": "TC-09",
+      "phase": "P5-deploy-dev",
+      "status": "PENDING",
+      "expected": "dev deploy succeeds without production token; deploy log and delivery summary written; P5 gate passes",
+      "actual": "",
+      "evidence": []
+    },
+    {
+      "id": "TC-10",
+      "phase": "P5-prod-negative",
+      "status": "PENDING",
+      "expected": "prod deploy without confirmation token/publish_confirmed is blocked",
+      "actual": "",
+      "evidence": []
+    },
+    {
+      "id": "TC-11",
+      "phase": "P6-semantic",
+      "status": "PENDING",
+      "expected": "semantic entry blocked without confirmation; fixture confirmation produces artifact; finish succeeds",
+      "actual": "",
+      "evidence": []
+    },
+    {
+      "id": "TC-12",
+      "phase": "guardrails",
+      "status": "PENDING",
+      "expected": "ctx evidence write, fabricated etl evidence, and runtime ledger write are all blocked",
+      "actual": "",
+      "evidence": []
+    },
+    {
+      "id": "TC-13",
+      "phase": "regression",
+      "status": "PENDING",
+      "expected": "plugin pytest suite has no new failures",
+      "actual": "",
+      "evidence": []
+    },
+    {
+      "id": "TC-14",
+      "phase": "closeout",
+      "status": "PENDING",
+      "expected": "status, gate diagnosis, governance report, and ledger agree",
+      "actual": "",
+      "evidence": []
+    }
+  ],
+  "summary": {
+    "total": 14,
+    "passed": 0,
+    "failed": 0,
+    "blocked": 0,
+    "pending": 14
+  }
+}
