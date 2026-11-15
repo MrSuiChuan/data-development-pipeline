@@ -86,6 +86,25 @@ P1 单独站在主流程之外（`/sds-design`）。想清楚和动手做分开�
 知识回写失败不会回滚已经完成的开发任务。需要跳过时使用 `finish --no-knowledge`；
 修好知识库配置后可以重跑 `finish`，知识库侧会按任务和内容指纹幂等处理。
 
+配置在写入前就被校验（`enabled` 必须是布尔，`timeout_s` 必须是 1–3600 的整数秒，
+`kbp_root` / `kbp_engine` 必须是字符串）：非法配置**不会**让 `finish` 崩掉，而是把结果写成
+`knowledge_config_invalid` 并逐条列出错在哪；`platform doctor` 也会一并体检这段配置。
+
+回写结果的 `gate` 取值可以直接判读：
+
+| gate | 含义 |
+| --- | --- |
+| `knowledge_config_invalid` | `knowledge.auto_update` 配错了（附 `errors`） |
+| `knowledge_unsafe_ident` | 工单号或目标表名不是安全标识符（含路径分隔符/`..`），拒绝写入 |
+| `knowledge_sds_invalid` | `sds_design.json` 的 `target_table` 不是对象 |
+| `knowledge_kb_missing` | 找不到知识库项目或 kbp 引擎 |
+| `knowledge_ingest_exec` | 调用 kbp 进程失败或超时（附 `timeout_s` / `kbp_engine`） |
+| `knowledge_ingest_failed` | kbp 返回失败（附 stdout/stderr 尾部） |
+| `knowledge_ingest_no_receipt` | kbp 说成功但没给版本号/URI 等回执，结果带 `receipt_missing=true` |
+
+SDS 是模型或人写的 JSON：字段映射里混进非对象条目只会被跳过并记进 `mapping_warnings`，
+`sql_evidence` 不是对象时按空处理——这两种脏输入都不会再打断回写。
+
 ---
 
 ## 30 秒上手（不碰任何真实系统）

@@ -961,8 +961,17 @@ def verb_platform(flags: Dict[str, str]) -> None:
     if sub in ("doctor", "diagnose"):
         # 配置体检：只判"配没配对"，不判"连不连得上"（连通性只有真跑才知道）。
         report = engines.diagnose_platform(CONFIG.get("platform") or {})
+        # 自动知识回写是 finish 的后置动作，配置错不该等到工单做完才发现——
+        # 这里与 platform 一起体检，错在哪逐条列出（与 finish 的 knowledge_config_invalid 同一个归一化器）。
+        knowledge_check = knowledge_ingest.normalize_config(CONFIG)
+        report["knowledge_auto_update"] = {
+            "ok": knowledge_check["ok"],
+            "errors": knowledge_check["errors"],
+            "enabled": knowledge_check["config"].get("enabled"),
+            "timeout_s": knowledge_check["config"].get("timeout_s"),
+        }
         emit(report)
-        if not report.get("ok"):
+        if not report.get("ok") or not knowledge_check["ok"]:
             sys.exit(1)
         return
     sql_text = flags.get("sql", "")

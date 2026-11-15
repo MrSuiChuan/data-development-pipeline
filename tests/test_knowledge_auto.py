@@ -140,5 +140,109 @@ class KnowledgeAutoTests(unittest.TestCase):
         self.assertTrue(any("ads_auto_test_di" in item["uri"] for item in index["documents"]))
 
 
+class KnowledgeConfigTests(KnowledgeAutoTests):
+    """配置与脏输入：这些曾经都会把 finish 拖成 traceback。"""
+
+    def _set_auto_update(self, value: object) -> None:
+        cfg = context.load_config(self.root)
+        cfg.setdefault("knowledge", {})["auto_update"] = value
+        context.write_json(context.config_path(self.root), cfg)
+
+    def test_disabled_auto_update_skips_without_touching_kb(self) -> None:
+        self._set_auto_update({"enabled": False})
+        result = knowledge_ingest.submit(self.root, "T-0001")
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["skipped"])
+        self.assertEqual(result["gate"], "knowledge_auto_update_disabled")
+
+    def test_zero_timeout_is_reported_not_raised(self) -> None:
+        self._set_auto_update({"enabled": True, "timeout_s": 0})
+        result = knowledge_ingest.submit(self.root, "T-0001")
+        self.assertEqual(result["gate"], "knowledge_config_invalid")
+        self.assertTrue(any("timeout_s" in item for item in result["errors"]))
+
+    def test_timeout_type_error_is_reported(self) -> None:
+        self._set_auto_update({"enabled": True, "timeout_s": {"bad": 1}})
+        result = knowledge_ingest.submit(self.root, "T-0001")
+        self.assertEqual(result["gate"], "knowledge_config_invalid")
+
+    def test_auto_update_must_be_an_object(self) -> None:
+        self._set_auto_update("yes")
+        result = knowledge_ingest.submit(self.root, "T-0001")
+        self.assertEqual(result["gate"], "knowledge_config_invalid")
+        self.assertIn("knowledge.auto_update 必须是对象", result["errors"][0])
+
+    def test_numeric_timeout_string_is_tolerated(self) -> None:
+        normalized = knowledge_ingest.normalize_config(
+            {"knowledge": {"auto_update": {"timeout_s": "60"}}}
+        )
+        self.assertTrue(normalized["ok"], normalized)
+        self.assertEqual(normalized["config"]["timeout_s"], 60)
+
+    def test_unsafe_table_id_is_rejected(self) -> None:
+        sds = context.load_json(self.req / "sds_design.json", {})
+        sds["target_table"]["name"] = "../escape"
+        context.write_json(self.req / "sds_design.json", sds)
+        built = knowledge_ingest.build_request(self.root, "T-0001")
+        self.assertFalse(built["ok"])
+        self.assertEqual(built["gate"], "knowledge_unsafe_ident")
+        result = knowledge_ingest.submit(self.root, "T-0001")
+        self.assertEqual(result["gate"], "knowledge_unsafe_ident")
+
+    def test_sds_target_table_must_be_an_object(self) -> None:
+        sds = context.load_json(self.req / "sds_design.json", {})
+        sds["target_table"] = "ads_broken"
+        context.write_json(self.req / "sds_design.json", sds)
+        built = knowledge_ingest.build_request(self.root, "T-0001")
+        self.assertFalse(built["ok"])
+        self.assertEqual(built["gate"], "knowledge_sds_invalid")
+
+    def test_non_dict_mappings_are_skipped_with_warning(self) -> None:
+        sds = context.load_json(self.req / "sds_design.json", {})
+        good = sds["field_mappings"][0]
+        sds["field_mappings"] = ["not-an-object", good]
+        context.write_json(self.req / "sds_design.json", sds)
+        built = knowledge_ingest.build_request(self.root, "T-0001")
+        self.assertTrue(built["ok"], built)
+        request = built["request"]
+        self.assertEqual(len(request["columns"]), 1)
+        self.assertTrue(request["mapping_warnings"])
+
+    def test_non_dict_sql_evidence_does_not_crash(self) -> None:
+        sds = context.load_json(self.req / "sds_design.json", {})
+        sds["field_mappings"][0]["sql_evidence"] = "not-an-object"
+        context.write_json(self.req / "sds_design.json", sds)
+        built = knowledge_ingest.build_request(self.root, "T-0001")
+        self.assertTrue(built["ok"], built)
+        self.assertIn("join_match_rate=None", built["request"]["calibers"][0])
+
+    def test_request_carries_absolute_roots_the_kb_plugin_resolves(self) -> None:
+        """artifact_root / consumer_root 是功能字段，必须仍是绝对路径。
+
+        实测教训：把它们改成项目相对路径会让知识库 ingest 找不到任务产物、
+        消费索引同步到错误位置——所以这条固定住契约，而不是"看起来更干净"。
+        """
+        built = knowledge_ingest.build_request(self.root, "T-0001")
+        request = built["request"]
+        self.assertEqual(Path(request["consumer_root"]), self.root)
+        self.assertEqual(Path(request["artifact_root"]), self.req)
+
+    def test_platform_doctor_surfaces_knowledge_config_error(self) -> None:
+        self._set_auto_update({"enabled": True, "timeout_s": -5})
+        proc = subprocess.run(
+            [sys.executable, str(ENGINE / "ddp.py"), "--root", str(self.root), "platform", "doctor"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        payload = json.loads(proc.stdout.strip())
+        self.assertFalse(payload["knowledge_auto_update"]["ok"])
+        self.assertTrue(
+            any("timeout_s" in item for item in payload["knowledge_auto_update"]["errors"])
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

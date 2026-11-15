@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.5.0] — 2026-11-15
+
+### Fixed / Added（自动知识回写的配置校验与脏输入健壮性）
+
+- **`knowledge.auto_update` 现在会被校验**：`enabled` 必须是布尔、`timeout_s` 必须是 1–3600 的
+  整数秒（数字字符串容忍）、`kbp_root`/`kbp_engine` 必须是字符串。配错不再让 `finish` 抛
+  `ValueError`，而是落 `knowledge_config_invalid` 并在 `errors` 里逐条说明；`platform doctor`
+  一并体检这段配置，配错即退出码 1。
+- **SDS 脏输入不再打断回写**：`target_table` 不是对象 → `knowledge_sds_invalid`；字段映射里
+  非对象条目跳过并记进 `mapping_warnings`；`sql_evidence` 非对象按空处理。
+- **拒绝路径穿越**：工单号与目标表名必须是安全标识符（字母数字与 `._-`，不以点开头），
+  否则 `knowledge_unsafe_ident`——它们会被知识库拼进产物路径。
+- **回执要能核对**：kbp 返回 `ok=true` 但既无版本号也无 URI 时，结果标 `receipt_missing=true`
+  与 `knowledge_ingest_no_receipt`，避免"说成功但拿不出凭证"。
+- 失败结果补充 `kbp_engine` / `timeout_s` 便于定位；`artifact_root` / `consumer_root` 保持
+  绝对路径（实测它们是知识库定位产物与消费索引的功能字段，改成相对路径会静默写错位置）。
+- 回归：`tests/test_knowledge_auto.py` 由 3 条扩到 17 条，覆盖上述每条分支，含与真实
+  knowledge-base-plugin 的端到端回写。
 ## [1.4.1] — 2026-10-19
 
 ### Added（任务完成后的自动知识回写，2026-10-19）
