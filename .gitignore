@@ -33,3 +33,9 @@ metastore_db/
 derby.log
 spark-warehouse/
 warehouse/
+
+# AWR 运行时备份与内容审查回执：前者是 state.db 快照（体积大、每轮接管都会新建），
+# 后者是 intake review 的字节绑定回执，内含本机绝对路径。两者都不进版本库；
+# 需要长期留证的审查结论由 AWR 的 state.db 与台账自身承载。
+.awr-backup-*/
+.awr/content-reviews/
