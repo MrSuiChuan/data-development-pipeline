@@ -58,6 +58,34 @@ P1 单独站在主流程之外（`/sds-design`）。想清楚和动手做分开�
 **不可逆失败**由 confirmation_gate 锁写加 publish_gate 的 `[已确认发布]` token 负责，autopilot
 也不旁路。
 
+## 任务完成后的自动知识回写
+
+工单执行 `finish` 后，插件默认把本次任务已经确认的产物整理成一张知识卡，自动调用
+`knowledge-base-plugin` 的幂等 `ingest` 接口。知识库仍然是唯一写入方，离线插件不会直接改
+`viking://` 或 `.kb/repo/`。
+
+自动回写读取 SDS 的字段映射与验证结论、DDL、调度注解、测试记录、部署记录和交付摘要。
+只有 `finished=true` 的工单才会提交，失败任务不写知识库。
+
+配置在 `.data-dev/config.json` 的 `knowledge.auto_update`：
+
+```jsonc
+{
+  "enabled": true,
+  "kbp_root": "",
+  "kbp_engine": "",
+  "timeout_s": 120
+}
+```
+
+`kbp_root` 留空时使用项目内 `.kb`；`kbp_engine` 留空时使用
+`<kbp_root>/.kb/engine/kbp.py`。每次回写留下
+`knowledge_update_request.json` 和 `knowledge_update_result.json`，后者包含版本、URI、
+消费索引同步结果和失败原因。
+
+知识回写失败不会回滚已经完成的开发任务。需要跳过时使用 `finish --no-knowledge`；
+修好知识库配置后可以重跑 `finish`，知识库侧会按任务和内容指纹幂等处理。
+
 ---
 
 ## 30 秒上手（不碰任何真实系统）
@@ -156,8 +184,7 @@ codex plugin add data-development-plugin@personal
 /setup                      # 初始化 .data-dev、同步引擎、注入规范
 /submit 把需求描述给我       # 建单（8 项质量门）
 /sds-design T-0001          # P1 数据概要设计（八规则 + 三门 + 终版贴单）
-/start T-0001               # 准入门 5 步 -> P2…P6（interactive）
-/start T-0001 --autopilot   # autopilot：旁路可返工判断，不可逆门仍要问人
+/start T-0001               # 技能先问模式、落台账、建 goal，再走准入门 -> P2…P6
 /copilot 把 T-0001 的 ETL 改成按天分区   # 单动作穿插
 /resume T-0001              # 跨会话续接
 /advance --phase 4 --ticket T-0001 --reason …   # 显式转场
@@ -171,7 +198,7 @@ Codex 侧一一对应。
 | `/setup` | `ddp-setup`（注入 `AGENTS.md` 而不是 `CLAUDE.md`） |
 | `/submit <需求>` | `ddp-submit` |
 | `/sds-design T-0001` | `ddp-sds-design` |
-| `/start T-0001 --autopilot` | `ddp-start` |
+| `/start T-0001` | `ddp-start`（技能内先问模式并建 goal） |
 | `/status`、`/advance`、`/resume`、`/copilot`、`/overview` | `ddp-status`、`ddp-advance`、`ddp-resume`、`ddp-copilot`、`ddp-overview` |
 
 三种走法覆盖不同大小的活。整套改动走 `/start`；只改一张表、补一个用例、看一眼状态走
@@ -250,6 +277,10 @@ Hive 的 `DECIMAL`、ClickHouse 的 `Decimal`、PostgreSQL 的 `NUMERIC` 不再�
 context 键，被 PreToolUse 硬门消费）、`review_report_gate`（WARN）与 SessionStart 提示。
 
 ### autopilot 边界
+
+开工前必须由用户明确选择模式，并写入 `.data-dev/runtime/preflight_ledger.json`；
+`start` 缺模式台账或工单级 goal 会直接 blocked。`--autopilot` 只作为兼容断言，
+不能绕过台账。
 
 | 决策点 | interactive | autopilot |
 | --- | --- | --- |
