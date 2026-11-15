@@ -81,3 +81,29 @@ Signed-off-by: Your Name <you@example.com>
    without the suffix change a reinstall copies the old files again.
 4. Open the plugin in a **new thread** — the host only loads the new version in a
    fresh session.
+
+## Publishing to the public mirror
+
+两个仓库，不是一个：
+
+| 仓库 | 角色 |
+| --- | --- |
+| MrSuiChuan/data-development-plugin（私有，origin） | 工作仓：开发、测试、AWR 台账都在这里 |
+| MrSuiChuan/data-development-pipeline（公开） | 脱敏镜像：对外发布面，只读消费 |
+
+公开镜像不是普通镜像——它的历史每发布一次都会被重写：
+
+`ash
+bash tools/publish_public.sh
+`
+
+脚本做的事：克隆工作仓到临时目录 → 按脱敏规则替换文件内容**和**提交信息（本机绝对路径、
+内网网段、内网服务地址、其它项目名）→ 剔除 `.awr/` 与脚本自身 → git-filter-repo 重写全历史 →
+核验工作树与全历史零残留 → 强推 `main` 与 tag。任何一步核验失败都会中止，不推送。
+
+要点：
+
+- **不要在公开镜像上直接提交**：它的历史每次重建，本地 clone 会与上游分叉；
+  所有改动走工作仓，再由脚本同步。
+- 强推是脱敏同步的固有代价，且不可逆；发布前先确认工作仓已提交、tag 已打好。
+- 同名 tag 在两个仓库指向不同 SHA（历史被重写），跨仓库不要互相比对 commit id。
