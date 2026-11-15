@@ -9,11 +9,20 @@ jobs:
     # 3.9 是 README 承诺的下限，3.12 对齐主力开发机。两端都跑全量用例——
     # 否则"Python 3.9+"就是一句没人验证过的对外声明（ENG-002）。
     # 下限改了要同步改 README；tests/test_repo_invariants.py 会核对两者一致。
+    #
+    # 3.9 单独钉在 ubuntu-22.04：ubuntu-latest 从 2026-10-19 起迁到 Ubuntu 26.04，
+    # 而 actions/python-versions 不为 26.04 构建 3.9，setup-python 会直接失败
+    # （实测注解原文：The version '3.9' with architecture 'x64' was not found for
+    #  Ubuntu 26.04）。3.12 留在 ubuntu-latest，顺带在最新 runner 上验一次。
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.12"]
-    runs-on: ubuntu-latest
+        include:
+          - os: ubuntu-22.04
+            python-version: "3.9"
+          - os: ubuntu-latest
+            python-version: "3.12"
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
