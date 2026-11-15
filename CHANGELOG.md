@@ -1,6 +1,33 @@
 # Changelog
 
-## [Unreleased]
+## [1.4.1] — 2026-10-19
+
+### Added（任务完成后的自动知识回写，2026-10-19）
+
+- `finish` 在工单完成后自动生成知识卡，调用 knowledge-base-plugin 的幂等 `ingest`；
+  失败只写 `knowledge_update_result.json`，不回滚开发任务；
+- 新增 `knowledge.auto_update` 配置（enabled / kbp_root / kbp_engine / timeout_s）；
+- 自动回写读取 SDS、DDL、调度、测试、部署和语义层产物，只提交 `finished=true` 的工单；
+- 新增 `finish --no-knowledge` 跳过开关；
+- 修复内置 demo 手写 ETL 回执但未写执行账本的问题，保证 demo 仍能过 P3 证据门；
+- 回归：`tests/test_knowledge_auto.py` 覆盖请求生成、无知识库时的非阻塞失败和端到端回写。
+
+## [1.4.0] — 2026-10-18
+
+### Added（开工前双模式预检，2026-10-18）
+
+- **模式必须开工前选择**：新增 `ddp.py mode select|show`。用户在建单后、`start` 前明确选择
+  `interactive`（确认模式）或 `autopilot`（自动模式），选择写入
+  `.data-dev/runtime/preflight_ledger.json` 与工单级 `_mode.json`；`--autopilot` 只作为兼容断言，
+  不能绕过台账。
+- **工单级 goal**：新增 `ddp.py goal create|show|check`，把工单的目标、范围、验收口径、目标表和
+  机器证据要求固化为 `_goal.json` / `_goal.md`，并写入预检台账。
+- **start 硬门**：`start` 先校验模式台账与 goal，缺任一项直接返回
+  `mode_choice_required` / `goal_required`；工单内容变更导致台账或 goal 过期时返回
+  `mode_stale` / `goal_stale`。通过后才进入原有准入门五步。
+- **双模式语义不变**：autopilot 仍只自动“可返工判断”；P5 生产发布/ALTER/回刷与 P6 语义层入口
+  仍必须人工确认，不能由模式选择绕过。
+- 回归：`tests/test_preflight.py` 覆盖模式选择、台账、goal、自动模式断言、模式锁定与过期检测。
 
 ### Fixed（插件测试跑出来的一处真问题，2026-10-15）
 

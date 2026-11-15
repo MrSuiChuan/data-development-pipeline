@@ -59,6 +59,8 @@ def default_state(ticket_id: str, title: str, description_md: str, ticket_hash: 
         "current_phase": 0,
         "finished": False,
         "run_mode": "interactive",  # interactive | autopilot
+        "mode_selection": None,  # mode ledger snapshot consumed by start
+        "goal_id": None,  # per-ticket goal created before start
         "level": None,
         "sds_design": {
             "status": SDS_STATUS_NONE,

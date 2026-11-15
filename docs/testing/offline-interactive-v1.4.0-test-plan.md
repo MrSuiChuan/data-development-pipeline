@@ -12,8 +12,8 @@
 
 | 项目 | 值 |
 | --- | --- |
-| 项目根 | `~\Documents\ChatGPT\data-development-plugin` |
-| 插件根 | `~\.codex\plugins\cache\personal\data-development-plugin\1.4.0+codex.20261018104559` |
+| 项目根 | `<PROJECT_ROOT>` |
+| 插件根 | `<CODEX_PLUGIN_CACHE>/data-development-plugin/<VERSION>` |
 | 宿主 | Codex（Windows / PowerShell） |
 | Python | `py -3`，Python 3.12.10 |
 | 执行日期 | 2026-10-18（Asia/Shanghai） |

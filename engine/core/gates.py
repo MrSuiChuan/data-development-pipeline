@@ -177,6 +177,10 @@ _SENSITIVE_MARKERS = (
     "_state.json",
     "_context.md",
     "autopilot_decisions.md",
+    "_mode.json",
+    "_goal.json",
+    "_goal.md",
+    "preflight_ledger.json",
 )
 
 
@@ -640,7 +644,14 @@ def decide_file_write(file_path: str, content: str, root: Optional[Path] = None)
     rel_lower = "/".join(_normalize_component(p).lower() for p in rel_to_ticket.parts)
 
     # machine state files: only the engine may write them (no tool-call backdoor)
-    if rel_lower in ("_state.json", "_context.md", "autopilot_decisions.md"):
+    if rel_lower in (
+        "_state.json",
+        "_context.md",
+        "autopilot_decisions.md",
+        "_mode.json",
+        "_goal.json",
+        "_goal.md",
+    ):
         return Decision(
             "block",
             gate="state_write_guard",

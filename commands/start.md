@@ -1,6 +1,6 @@
 ---
-description: 准入门五步 + P2-P6 六阶段研发态执行（全托管流水线）
-argument-hint: <T-xxxx> [--autopilot]
+description: 开工前模式选择 + 台账/Goal 预检 + 准入门五步 + P2-P6 双模式研发执行
+argument-hint: <T-xxxx>
 allowed-tools:
   - Bash
   - Read
@@ -16,19 +16,56 @@ allowed-tools:
   - Agent(data-development-plugin:architecture-explorer, data-development-plugin:data-tester, data-development-plugin:dqc-deployer, data-development-plugin:backfiller, data-development-plugin:privilege-applier)
 ---
 
-# /start <T-xxxx> [--autopilot] — 进入研发态并跑完 P2-P6
+# /start <T-xxxx> — 先选模式/建 Goal，再进入研发态
 
-`start` 是进入研发态的唯一入口。第一个动作必须是**准入门五步**，任何一步失败都拒绝开工。
+`start` 是进入研发态的唯一入口。第一个动作必须是**开工前预检**：用户先选择运行模式，
+引擎落模式台账并生成工单级 goal；预检通过后才进入准入门五步。任何一步失败都拒绝开工。
+
+## 第零步：开工前预检（强制，不能由 AI 自答）
+
+建议在建单后、SDS 设计前完成，让 goal 先约束设计；最迟必须在 `start` 进入 P2 前完成。
+
+先把两种模式摆给用户，让用户明确选一个：
+
+- **interactive（确认模式）**：P2 方案、P3 任务注册、P4 测试计划等关键判断逐步确认；
+- **autopilot（自动模式）**：可返工判断交给 AI 自主并写入决策日志，但 P5 生产发布/ALTER/回刷
+  和 P6 语义层入口仍然必须由用户确认，不能自动跳过。
+
+用户回答后，先把选择落成模式台账（`--chosen-by` 用用户标识，不能写 AI 自己）：
+
+```
+py -3 .data-dev/engine/ddp.py mode select --ticket <T-xxxx> \
+  --mode interactive|autopilot --chosen-by "<用户标识>" \
+  --source user_chat --reason "开工前模式选择"
+```
+
+再创建工单级 goal：
+
+```
+py -3 .data-dev/engine/ddp.py goal create --ticket <T-xxxx>
+```
+
+产物：
+
+- `.data-dev/runtime/preflight_ledger.json`：模式/Goal 的追加式台账；
+- `.data-dev/tickets/<T-xxxx>/_mode.json`：当前模式快照；
+- `.data-dev/tickets/<T-xxxx>/_goal.json` 与 `_goal.md`：目标、范围、验收口径、成功证据。
+
+`start` 会硬拦以下情况：没有模式台账（`mode_choice_required`）、没有 goal（`goal_required`）、
+工单内容变更导致台账/Goal 过期（`mode_stale` / `goal_stale`）。如果用户没有明确回答，
+**停下来等回答**，不要默认 interactive，也不要默认 autopilot。
 
 ## 第一步：准入门（引擎执行）
 
 ```
-py -3 .data-dev/engine/ddp.py start --ticket <T-xxxx> [--autopilot]
+py -3 .data-dev/engine/ddp.py start --ticket <T-xxxx>
 ```
 
-引擎完成：工单校验 → 终版锚点（【数据概要设计 vN】）→ 内容重验（贴单 json 块重跑八条规则）→
+引擎先校验模式台账与 goal，再完成：工单校验 → 终版锚点（【数据概要设计 vN】）→
+内容重验（贴单 json 块重跑八条规则）→
 口径 hash 比对 → 上下文重建。若返回 blocked：
 
+- `mode_choice_required` / `goal_required` → 回到第零步补齐，不要绕过；
 - 无终版 → 提示用户先跑 `/sds-design`；
 - hash 不一致 → AskUserQuestion 强提示是否重跑 SDS（人工决策，不自动作废）；
 - 通过后工单自动流转「开发中」，进入 P2。
@@ -112,7 +149,8 @@ py -3 .data-dev/engine/ddp.py start --ticket <T-xxxx> [--autopilot]
 
 ## autopilot 模式
 
-`--autopilot` 会把阶段转场、入口定级、方案选择、测试计划等“可返工判断”交给 AI 自主，
-并把决策写入 `autopilot_decisions.md`；**生产发布/ALTER/回刷与语义层进入门永远 AskUserQuestion**
+autopilot 由第零步的模式台账决定（`--autopilot` 只作为兼容断言，不能绕过台账）。
+它会把阶段转场、入口定级、方案选择、测试计划等“可返工判断”交给 AI 自主，并把决策写入
+`autopilot_decisions.md`；**生产发布/ALTER/回刷与语义层进入门永远 AskUserQuestion**
 （非生产部署不需要发布确认 token）。
 每次部署前必须向用户全文展示决策日志与审查报告。

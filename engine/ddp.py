@@ -24,7 +24,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from core import clients, context, ddl, engines, gates, spec, state, validators  # noqa: E402
+from core import clients, context, ddl, engines, gates, knowledge_ingest, preflight, spec, state, validators  # noqa: E402
 from core.state import Pipeline  # noqa: E402
 
 # Windows 上 stdout/stderr 被重定向（管道、写文件、CI）时用 cp1252/cp936，
@@ -441,10 +441,98 @@ def verb_sds(flags: Dict[str, str]) -> None:
         print("sds 子命令: validate|render|build-comment|bridge|backfill-resolve|review|status")
 
 
+def verb_mode(flags: Dict[str, str]) -> None:
+    """Record or inspect the pre-development run mode."""
+    tid = ticket(flags)
+    sub = flags.get("sub") or "show"
+    if sub == "select":
+        try:
+            result = preflight.select_mode(
+                ROOT,
+                tid,
+                flags.get("mode") or flags.get("run-mode") or "",
+                flags.get("chosen-by") or flags.get("chosen_by") or flags.get("by") or "",
+                source=flags.get("source") or "user_chat",
+                reason=flags.get("reason") or "",
+            )
+        except preflight.PreflightError as exc:
+            emit(exc.to_dict())
+            sys.exit(1)
+        emit(result)
+        return
+    if sub == "show":
+        emit(
+            {
+                "ok": True,
+                "ticket": tid,
+                "mode": preflight.load_mode(ROOT, tid),
+                "ledger": str(context.ledger_dir(ROOT) / preflight.LEDGER_FILE),
+            }
+        )
+        return
+    emit(
+        {
+            "ok": False,
+            "gate": "mode_usage",
+            "reason": "mode 子命令: select --mode interactive|autopilot --chosen-by <name> | show",
+        }
+    )
+    sys.exit(2)
+
+
+def verb_goal(flags: Dict[str, str]) -> None:
+    """Create or inspect the per-ticket development goal."""
+    tid = ticket(flags)
+    sub = flags.get("sub") or "show"
+    if sub == "create":
+        try:
+            result = preflight.create_goal(ROOT, tid, replace=bool(flags.get("replace")))
+        except preflight.PreflightError as exc:
+            emit(exc.to_dict())
+            sys.exit(1)
+        emit(result)
+        return
+    if sub in ("show", "check"):
+        goal = preflight.load_goal(ROOT, tid)
+        mode = preflight.load_mode(ROOT, tid)
+        if sub == "check" and not goal:
+            emit(
+                {
+                    "ok": False,
+                    "blocked": True,
+                    "gate": "goal_required",
+                    "reason": "goal 尚未创建。",
+                }
+            )
+            sys.exit(1)
+        emit({"ok": True, "ticket": tid, "goal": goal, "mode": mode})
+        return
+    emit(
+        {
+            "ok": False,
+            "gate": "goal_usage",
+            "reason": "goal 子命令: create [--replace] | show | check",
+        }
+    )
+    sys.exit(2)
+
+
 def verb_start(flags: Dict[str, str]) -> None:
     tid = ticket(flags)
     req = context.ticket_dir(ROOT, tid)
     pipeline = require_pipeline(tid, req)
+    # Preflight: the user must choose a mode and the ticket must have a goal
+    # before any admission / development work starts.  The ledger is the
+    # source of truth; --autopilot is only a compatibility assertion.
+    try:
+        mode_entry = preflight.require_mode(
+            ROOT, tid, autopilot_flag=bool(flags.get("autopilot"))
+        )
+        goal = preflight.require_goal(ROOT, tid, mode_entry)
+    except preflight.PreflightError as exc:
+        emit(exc.to_dict())
+        sys.exit(1)
+    run_mode = str(mode_entry.get("mode"))
     steps = []
     # 1. 工单校验
     try:
@@ -516,7 +604,16 @@ def verb_start(flags: Dict[str, str]) -> None:
         emit({"ok": False, "step": 5, "reason": "level 未落盘。"})
         sys.exit(1)
     pipeline.set_level(level, "start 准入上下文重建")
-    run_mode = "autopilot" if flags.get("autopilot") else "interactive"
+    sds_after = context.load_json(req / "sds_design.json", {}) or {}
+    target_after = str((sds_after.get("target_table") or {}).get("name") or "")
+    preflight.enrich_goal(ROOT, tid, sds=sds_after, level=level, target_table=target_after)
+    pipeline.state["mode_selection"] = mode_entry
+    pipeline.state["goal_id"] = goal.get("goal_id")
+    pipeline.log_transition(
+        "preflight",
+        "运行模式=%s（台账 %s），goal=%s"
+        % (run_mode, mode_entry.get("entry_id"), goal.get("goal_id")),
+    )
     pipeline.enter_dev_from_sds(run_mode)
     tracker().set_status(tid, "开发中", reason="start 准入门通过（唯一进入研发态的流转点）")
     context.set_current_ticket(ROOT, tid)
@@ -550,6 +647,7 @@ def verb_status(flags: Dict[str, str]) -> None:
     data = pipeline.summary()
     data["files"] = sorted(p.name for p in req.iterdir() if p.is_file())
     data["config_warns"] = config_security_warns(context.load_config(ROOT))
+    data["preflight"] = preflight.summary(ROOT, tid)
     if flags.get("gate") or flags.get("1") == "gate":
         enriched = dict(pipeline.state)
         enrich_state(enriched)
@@ -608,6 +706,7 @@ def verb_report(flags: Dict[str, str]) -> None:
             "total": len(decisions),
             "risk": [d for d in decisions if d.get("risk")],
         },
+        "preflight": preflight.summary(ROOT, tid),
         "config_warns": config_security_warns(CONFIG),
         "files": sorted(p.name for p in req.iterdir() if p.is_file()),
     }
@@ -618,6 +717,12 @@ def verb_report(flags: Dict[str, str]) -> None:
             f"- ticket: {report['ticket']} · {report['title']}",
             f"- phase: P{report['phase']} {report['phase_name']} · finished={report['finished']}",
             f"- run_mode: {report['run_mode']} · level: {report['level']} · sds: {report['sds_status']}",
+            "- preflight: mode=%s · goal=%s · ledger=%s"
+            % (
+                (report["preflight"].get("mode") or {}).get("mode") or "-",
+                (report["preflight"].get("goal") or {}).get("goal_id") or "-",
+                report["preflight"].get("ledger") or "-",
+            ),
             f"- completed: {','.join(map(str, report['completed'])) or '-'}",
             "",
             "## 证据",
@@ -1292,7 +1397,27 @@ def verb_finish(flags: Dict[str, str]) -> None:
         except clients.ClientError as exc:
             emit({"ok": False, "reason": f"工单流转失败: {exc}"})
             sys.exit(1)
-    emit(pipeline.summary())
+    if flags.get("no-knowledge"):
+        knowledge_result = {
+            "ok": False,
+            "skipped": True,
+            "gate": "knowledge_auto_update_skipped",
+            "reason": "finish --no-knowledge",
+        }
+    else:
+        try:
+            knowledge_result = knowledge_ingest.submit(ROOT, tid)
+        except Exception as exc:  # 知识回写不能回滚已完成的开发任务
+            knowledge_result = {
+                "ok": False,
+                "gate": "knowledge_update_exception",
+                "reason": f"{type(exc).__name__}: {exc}",
+            }
+    pipeline.set_context("knowledge_update", knowledge_result)
+    pipeline.save()
+    summary = pipeline.summary()
+    summary["knowledge_update"] = knowledge_result
+    emit(summary)
 
 
 # ---------------------------------------------------------------------------
@@ -1402,10 +1527,8 @@ def _write_dev_artifacts(req: Path) -> None:
         req / "ddl" / "ads_user_act_di.sql",
         "-- table: ads_user_act_di\n-- env: dev\n-- 存量表 L1 改造：新增 active_flag 列（DDL 变更脚本）\nALTER TABLE ads_user_act_di ADD COLUMN active_flag STRING COMMENT '活跃标志';\n",
     )
-    context.write_text(
-        req / "etl" / "ads_user_act_di.sql",
-        "-- table: ads_user_act_di\n-- source: dwd_user_di\n-- env: dev\nINSERT OVERWRITE TABLE ads_user_act_di PARTITION (ds='20260907')\nSELECT user_id, active_flag\nFROM dwd_user_di\nWHERE ds = '20260907';\n",
-    )
+    etl_text = "-- table: ads_user_act_di\n-- source: dwd_user_di\n-- env: dev\nINSERT OVERWRITE TABLE ads_user_act_di PARTITION (ds='20260907')\nSELECT user_id, active_flag\nFROM dwd_user_di\nWHERE ds = '20260907';\n"
+    context.write_text(req / "etl" / "ads_user_act_di.sql", etl_text)
     context.write_text(
         req / "dp_task" / "ads_user_act_di.sql",
         "-- table: ads_user_act_di\n-- source: dwd_user_di\n-- schedule: 0 2 * * *\n-- env: dev\nINSERT OVERWRITE TABLE ads_user_act_di PARTITION (ds='${bizdate}')\nSELECT user_id, active_flag\nFROM dwd_user_di\nWHERE ds = '${bizdate}';\n",
@@ -1423,9 +1546,25 @@ def _write_dev_artifacts(req: Path) -> None:
             "engine": "mock",
         },
     )
+    ledger_path = context.ledger_dir(ROOT) / "executions.json"
+    ledger = context.load_json(ledger_path, {"runs": []}) or {"runs": []}
+    ledger.setdefault("runs", []).append(
+        {
+            "query_id": "q_dev_ads_user_act",
+            "status": "SUCCESS",
+            "env": "dev",
+            "executed_at": context.utcnow(),
+            "sql_hash": context.sha256_text(etl_text),
+            "evidence_level": engines.EVIDENCE_MOCK,
+            "engine": "mock",
+        }
+    )
+    context.write_json(ledger_path, ledger)
 
 
 def _write_test_artifacts(req: Path) -> None:
+    test_sql = "SELECT user_id, active_flag FROM ads_user_act_di WHERE ds='20260907';\n"
+    context.write_text(req / "test" / "tc_0001.sql", test_sql)
     context.write_text(
         req / "test_report.md",
         """# test_report.md
@@ -1458,6 +1597,20 @@ def _write_test_artifacts(req: Path) -> None:
             "summary": {"total": 1, "success": 1, "failed": 0},
         },
     )
+    ledger_path = context.ledger_dir(ROOT) / "executions.json"
+    ledger = context.load_json(ledger_path, {"runs": []}) or {"runs": []}
+    ledger.setdefault("runs", []).append(
+        {
+            "query_id": "q_tc_0001",
+            "status": "SUCCESS",
+            "env": "dev",
+            "executed_at": context.utcnow(),
+            "sql_hash": context.sha256_text(test_sql),
+            "evidence_level": engines.EVIDENCE_MOCK,
+            "engine": "mock",
+        }
+    )
+    context.write_json(ledger_path, ledger)
 
 
 def _write_deploy_artifacts(req: Path, tid: str) -> None:
@@ -1534,6 +1687,16 @@ def verb_demo(flags: Dict[str, str]) -> None:
     # start -> P2
     flags2 = dict(flags)
     flags2.setdefault("ticket", tid)
+    demo_mode = "autopilot" if flags.get("autopilot") else "interactive"
+    preflight.select_mode(
+        ROOT,
+        tid,
+        demo_mode,
+        chosen_by="demo",
+        source="demo",
+        reason="demo 演示：自动记录模式，便于验证双模式链路",
+    )
+    preflight.create_goal(ROOT, tid)
     if flags.get("autopilot"):
         flags2["autopilot"] = "1"
     verb_start(flags2)
@@ -1681,7 +1844,11 @@ verbs:
   comment add --ticket <id> --anchor <a> --content ... | --file <f>
   sds enter --mode verify|generate        # P1 入口（状态机 enter_sds）
   sds validate [--confirm] | render | build-comment | bridge | backfill-resolve --action synced|declined | review --action refresh|supply
-  start [--ticket <id>] [--autopilot]        # 准入门 5 步 -> P2
+  mode select --ticket <id> --mode interactive|autopilot --chosen-by <name>
+  mode show --ticket <id>                    # 开工前模式选择 + 台账
+  goal create --ticket <id> [--replace]      # 创建工单级 goal
+  goal show|check --ticket <id>
+  start [--ticket <id>] [--autopilot]        # 先过 mode/goal 预检，再走准入门 5 步 -> P2
   advance --phase N --ticket <id> --reason ... [--allow-back]
   status [--ticket <id>]
   status --gate [--ticket <id>]            # 诊断当前阶段出口门
@@ -1703,7 +1870,7 @@ verbs:
   deploy --comment '[已确认发布] ...' [--ticket <id>]
   rollback --comment '[已回滚] ...' [--ticket <id>] [--env prod]
   semantic [--ticket <id>] [--scenario metric-dev]
-  finish [--ticket <id>]
+  finish [--ticket <id>] [--no-knowledge]
   demo [--autopilot] [--root <tmp>]
 
 global: --root <project-dir>  (default: nearest .data-dev root or cwd)
@@ -1720,7 +1887,7 @@ def main() -> None:
         print(HELP)
         return
     known_verbs = {
-        "setup", "engine", "ticket", "comment", "sds", "start", "advance", "status", "report", "ctx",
+        "setup", "engine", "ticket", "comment", "sds", "mode", "goal", "start", "advance", "status", "report", "ctx",
         "evidence", "sql", "ddl", "platform", "kb", "diff", "review-report", "deploy", "semantic",
         "rollback", "finish", "demo", "baseline",
     }
@@ -1732,7 +1899,7 @@ def main() -> None:
     flags = boot(tokens)
     sub = next((token for token in tokens[verb_index + 1 :] if not token.startswith("-")), None)
     if sub and verb in (
-        "ticket", "sds", "kb", "platform", "ctx", "evidence", "comment", "sql", "ddl", "engine", "baseline",
+        "ticket", "sds", "mode", "goal", "kb", "platform", "ctx", "evidence", "comment", "sql", "ddl", "engine", "baseline",
     ):
         flags["sub"] = sub
     handlers: Dict[str, Callable[[Dict[str, str]], None]] = {
@@ -1741,6 +1908,8 @@ def main() -> None:
         "ticket": verb_ticket,
         "comment": verb_comment,
         "sds": verb_sds,
+        "mode": verb_mode,
+        "goal": verb_goal,
         "start": verb_start,
         "advance": verb_advance,
         "status": verb_status,

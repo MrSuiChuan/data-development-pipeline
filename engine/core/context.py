@@ -165,6 +165,14 @@ def default_config() -> Dict[str, Any]:
             "kind": "auto",
             "limit": 10,
             "level": 2,
+            # 任务 finish 后自动回写知识库；失败只落 knowledge_update_result.json，
+            # 不影响已经完成的开发任务。
+            "auto_update": {
+                "enabled": True,
+                "kbp_root": "",
+                "kbp_engine": "",
+                "timeout_s": 120,
+            },
             "ov": {
                 "url": "",  # OpenViking server，如 http://127.0.0.1:1933
                 "api_key_env": "OV_API_KEY",  # 密钥环境变量（推荐）

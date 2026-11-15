@@ -33,8 +33,10 @@ description: 建数据需求工单（8 项质量门），流水线入口（Codex
 4. 建单成功得到 `T-xxxx`。输出给用户：
 
    - 工单号、模板类型（数据任务）；
-   - 下一步：`data-development-plugin:ddp-sds-design T-xxxx` 进入数据概要设计；
+   - 下一步：先做开工前预检（让用户选择 `interactive` 确认模式或 `autopilot` 自动模式，
+     再运行 `mode select` 与 `goal create`），然后 `data-development-plugin:ddp-sds-design T-xxxx` 进入数据概要设计；
    - 提示：在设计(SDS)未终版贴单前，`data-development-plugin:ddp-start` 会被准入门拦住。
+   - 提示：`data-development-plugin:ddp-start` 还会硬拦没有模式台账或工单级 goal 的工单，缺任一项都不能进入 P2。
 
 5. 删除临时描述文件。
 
