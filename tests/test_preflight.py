@@ -179,5 +179,89 @@ class PreflightTests(unittest.TestCase):
         self.assertIn("mode_stale", proc.stdout)
 
 
+class PreflightHardeningTests(PreflightTests):
+    """台账与快照被写坏、字段类型不对时：报可读的门，不静默 reset、不抛 traceback。"""
+
+    def _ledger_path(self) -> Path:
+        return self.root / ".data-dev" / "runtime" / "preflight_ledger.json"
+
+    def _state_path(self) -> Path:
+        return self.root / ".data-dev" / "tickets" / self.tid / "_state.json"
+
+    def _patch_state(self, **fields: object) -> None:
+        path = self._state_path()
+        state = json.loads(path.read_text(encoding="utf-8"))
+        state.update(fields)
+        path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def test_corrupt_ledger_is_refused_and_left_untouched(self) -> None:
+        ledger = self._ledger_path()
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledger.write_text('{"schema_version": 1, "entries": "boom"}', encoding="utf-8")
+        before = ledger.read_bytes()
+
+        proc = self._select("interactive")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("ledger_corrupt", proc.stdout)
+        self.assertNotIn("Traceback", proc.stderr)
+        self.assertEqual(ledger.read_bytes(), before, "损坏的台账不允许被静默重置")
+
+    def test_bad_next_entry_counter_is_refused(self) -> None:
+        ledger = self._ledger_path()
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledger.write_text('{"entries": [], "next_entry": "abc"}', encoding="utf-8")
+        proc = self._select("interactive")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("ledger_corrupt", proc.stdout)
+
+    def test_non_numeric_phase_reports_gate_instead_of_crashing(self) -> None:
+        self._patch_state(current_phase="P2")
+        proc = self._select("interactive")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("ticket_state_invalid", proc.stdout)
+        self.assertNotIn("Traceback", proc.stderr)
+
+    def test_out_of_range_phase_reports_gate(self) -> None:
+        self._patch_state(current_phase=99)
+        proc = self._select("interactive")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("ticket_state_invalid", proc.stdout)
+
+    def test_mode_snapshot_without_hash_is_treated_as_stale(self) -> None:
+        self._select("interactive")
+        run_engine(self.root, "goal", "create", "--ticket", self.tid, check=True)
+        mode_path = self.root / ".data-dev" / "tickets" / self.tid / "_mode.json"
+        mode = json.loads(mode_path.read_text(encoding="utf-8"))
+        mode.pop("ticket_hash", None)
+        mode_path.write_text(json.dumps(mode, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        proc = run_engine(self.root, "start", "--ticket", self.tid)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("mode_stale", proc.stdout)
+
+    def test_non_object_goal_snapshot_is_replaced(self) -> None:
+        self._select("interactive")
+        goal_path = self.root / ".data-dev" / "tickets" / self.tid / "_goal.json"
+        goal_path.write_text("[]", encoding="utf-8")
+
+        proc = run_engine(self.root, "goal", "create", "--ticket", self.tid, check=True)
+        self.assertIn("G-", proc.stdout)
+
+    def test_summary_is_not_ready_without_ticket_hash(self) -> None:
+        from core import preflight
+
+        self._select("interactive")
+        run_engine(self.root, "goal", "create", "--ticket", self.tid, check=True)
+        req = context.ticket_dir(self.root, self.tid)
+        for name in ("_mode.json", "_goal.json"):
+            path = req / name
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data.pop("ticket_hash", None)
+            path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+        payload = preflight.summary(self.root, self.tid)
+        self.assertFalse(payload["ready"], "缺 hash 时不能判 ready")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

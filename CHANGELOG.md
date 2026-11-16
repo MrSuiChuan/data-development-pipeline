@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.5.1] — 2026-11-16
+
+### Fixed（开工前预检的台账与快照健壮性）
+
+- **台账损坏不再被静默重置**：`preflight_ledger.json` 结构非法（`entries` 不是数组、
+  `next_entry`/`next_goal` 不是 >=1 的整数）时，`mode select` / `goal create` 报
+  `ledger_corrupt` 并**拒绝写入**。此前会把它重置成空台账再写回，等于悄悄抹掉审计历史。
+- **阶段号脏值报门而不是崩**：`current_phase` 写成 `"P2"`、布尔的 `true` 或越界值时，
+  报 `ticket_state_invalid`；此前 `int()` 直接抛 ValueError（traceback 到用户脸上）。
+- **模式/目标快照 fail-closed**：`_mode.json` 缺 `ticket_hash` 时按 stale 处理（此前会跳过
+  一致性检查）；工单缺正文与 hash 时 `mode select` / `goal create` 报 `ticket_hash_missing`；
+  `preflight.summary()` 在两侧都没有 hash 时不再判 `ready`。
+- **快照被写成非对象**：`_goal.json` 是 `[]` 这类值时按"没有合法 goal"处理并正常重建，
+  而不是 AttributeError。
+- 回归：`tests/test_preflight.py` 10 → 17 条（新增 7 条覆盖上述每条分支），全量 311 → 328 通过。
+
 ## [1.5.0] — 2026-11-15
 
 ### Fixed / Added（自动知识回写的配置校验与脏输入健壮性）

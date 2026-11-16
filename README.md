@@ -301,6 +301,11 @@ context 键，被 PreToolUse 硬门消费）、`review_report_gate`（WARN）与
 `start` 缺模式台账或工单级 goal 会直接 blocked。`--autopilot` 只作为兼容断言，
 不能绕过台账。
 
+预检这层也是 fail-closed 的：台账结构非法（`entries` 不是数组、`next_entry`/`next_goal` 不是整数）
+时报 `ledger_corrupt` 并**拒绝写入**——不会把台账静默重置成空；工单 `current_phase` 是脏值时报
+`ticket_state_invalid`；`_mode.json` 缺 `ticket_hash` 时按 `mode_stale` 处理；工单缺正文与 hash
+时报 `ticket_hash_missing`。
+
 | 决策点 | interactive | autopilot |
 | --- | --- | --- |
 | Phase 转场 | 用户确认才进 | stage_gate PASS 自动转场 |

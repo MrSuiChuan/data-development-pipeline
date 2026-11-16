@@ -72,11 +72,55 @@ def _ticket_hash(state: Dict[str, Any]) -> str:
     return str(state.get("ticket_hash") or "")
 
 
+def _empty_ledger() -> Dict[str, Any]:
+    return {"schema_version": 1, "next_entry": 1, "next_goal": 1, "entries": []}
+
+
+def _phase_of(state: Dict[str, Any]) -> int:
+    """工单阶段号。脏值要报可读的门，而不是把 ValueError 抛给用户。"""
+    raw = state.get("current_phase", 0)
+    if raw is None or raw == "":
+        return 0
+    if isinstance(raw, bool):
+        raise PreflightError(
+            "ticket_state_invalid",
+            "工单 current_phase 非法：%r（需要 0..7 的整数）" % (raw,),
+        )
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise PreflightError(
+            "ticket_state_invalid",
+            "工单 current_phase 非法：%r（需要 0..7 的整数）" % (raw,),
+        )
+    if value < 0 or value > 7:
+        raise PreflightError(
+            "ticket_state_invalid",
+            "工单 current_phase 越界：%r（需要 0..7 的整数）" % (raw,),
+        )
+    return value
+
+
 def _ledger(root: Path) -> tuple:
+    """读预检台账。台账损坏时**拒绝写**，绝不静默重置——那是审计历史。"""
     path = context.ledger_dir(root) / LEDGER_FILE
-    data = context.load_json(path, {}) or {}
+    if not path.is_file():
+        return path, _empty_ledger()
+    data = context.load_json(path, None)
     if not isinstance(data, dict) or not isinstance(data.get("entries"), list):
-        data = {"schema_version": 1, "next_entry": 1, "next_goal": 1, "entries": []}
+        raise PreflightError(
+            "ledger_corrupt",
+            "预检台账结构非法（要求 entries 为数组）。插件不会自动重置台账；"
+            "请人工确认 .data-dev/runtime/preflight_ledger.json 后修复。",
+        )
+    for key in ("next_entry", "next_goal"):
+        value = data.get(key, 1)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise PreflightError(
+                "ledger_corrupt",
+                "预检台账的 %s 非法：%r（要求 >=1 的整数）。" % (key, value),
+            )
+    data.setdefault("schema_version", 1)
     data.setdefault("next_entry", 1)
     data.setdefault("next_goal", 1)
     return path, data
@@ -119,7 +163,7 @@ def select_mode(
     req, state = _ticket_state(root, ticket)
     if not state:
         raise PreflightError("ticket_not_initialized", "工单未初始化：先 /submit 建单。")
-    phase = int(state.get("current_phase") or 0)
+    phase = _phase_of(state)
     if phase >= 2:
         raise PreflightError(
             "mode_locked",
@@ -127,6 +171,11 @@ def select_mode(
         )
 
     current_hash = _ticket_hash(state)
+    if not current_hash:
+        raise PreflightError(
+            "ticket_hash_missing",
+            "工单缺少需求正文与 hash，无法把模式绑定到工单；请先 /submit 写清需求正文。",
+        )
     current = load_mode(root, ticket)
     if current and current.get("mode") == mode and current.get("ticket_hash") == current_hash:
         return {"ok": True, "reused": True, "mode": current}
@@ -165,7 +214,8 @@ def require_mode(root: Path, ticket: str, *, autopilot_flag: bool = False) -> Di
         )
     req, state = _ticket_state(root, ticket)
     current_hash = _ticket_hash(state)
-    if mode.get("ticket_hash") and mode["ticket_hash"] != current_hash:
+    # 缺 hash 属于"无法证明没变"，按 stale 处理（fail-closed），不能让检查被绕过。
+    if not mode.get("ticket_hash") or mode["ticket_hash"] != current_hash:
         raise PreflightError(
             "mode_stale",
             "模式台账绑定的工单 hash 与当前工单不一致：工单内容已变更，请让用户重新选择模式并更新台账。",
@@ -269,13 +319,18 @@ def create_goal(root: Path, ticket: str, *, replace: bool = False) -> Dict[str, 
     req, state = _ticket_state(root, ticket)
     if not state:
         raise PreflightError("ticket_not_initialized", "工单未初始化：先 /submit 建单。")
-    phase = int(state.get("current_phase") or 0)
+    phase = _phase_of(state)
     if phase >= 2:
         raise PreflightError(
             "goal_locked",
             "工单已进入研发态，goal 已锁定；如需重开目标，请先回退到 P1 并让用户重新确认。",
         )
     current_hash = _ticket_hash(state)
+    if not current_hash:
+        raise PreflightError(
+            "ticket_hash_missing",
+            "工单缺少需求正文与 hash，无法把 goal 绑定到工单；请先 /submit 写清需求正文。",
+        )
     if mode.get("ticket_hash") and mode["ticket_hash"] != current_hash:
         raise PreflightError(
             "mode_stale",
@@ -283,6 +338,9 @@ def create_goal(root: Path, ticket: str, *, replace: bool = False) -> Dict[str, 
         )
 
     existing = context.load_json(req / GOAL_FILE, {}) or {}
+    if not isinstance(existing, dict):
+        # 快照被写坏时按"没有合法 goal"处理，让正常的创建流程把它覆盖掉。
+        existing = {}
     if existing and not replace:
         if existing.get("ticket_hash") == current_hash and existing.get("mode") == mode.get("mode"):
             return {"ok": True, "reused": True, "goal": existing}
@@ -401,8 +459,16 @@ def enrich_goal(
 def summary(root: Path, ticket: str) -> Dict[str, Any]:
     mode = load_mode(root, ticket)
     goal = load_goal(root, ticket)
-    ready = bool(mode and goal and mode.get("mode") == goal.get("mode")
-                 and mode.get("ticket_hash") == goal.get("ticket_hash"))
+    mode_hash = str((mode or {}).get("ticket_hash") or "")
+    goal_hash = str((goal or {}).get("ticket_hash") or "")
+    # 两侧都没有 hash 时不能判 ready——那是"没证据也算通过"。
+    ready = bool(
+        mode
+        and goal
+        and mode.get("mode") == goal.get("mode")
+        and mode_hash
+        and mode_hash == goal_hash
+    )
     return {
         "mode": mode,
         "goal": goal,
